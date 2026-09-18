@@ -241,7 +241,7 @@ EXCLUDE_USERS: set[str] = {
     u.lower() for u in _pe.get("exclude_users", [
         "streamelements", "nightbot", "fossabot", "moobot", "wizebot",
         "soundalerts", "streamlabs", "pokemoncommunitygame", "potatbotat",
-        "buttsbot", "supibot", "kunszg",
+        "buttsbot", "supibot", 
     ])
 }
 _llm = _cfg.get("llm", {})

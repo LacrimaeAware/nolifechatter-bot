@@ -27,7 +27,7 @@ _rename_cache = {}   # channel -> (newest_log_mtime, {current_name: [names]})
 BOTS = {
     "streamelements", "nightbot", "fossabot", "moobot", "wizebot",
     "soundalerts", "streamlabs", "pokemoncommunitygame", "potatbotat",
-    "buttsbot", "supibot", "kunszg", "automod", "mtgbot", "thepositivebot",
+    "buttsbot", "supibot", "automod", "mtgbot", "thepositivebot",
 }
 # The operator's own bot account and community-specific bots come from
 # [persona] exclude_users in config.toml, so no account name is hard-coded.
