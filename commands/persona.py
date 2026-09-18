@@ -1,0 +1,144 @@
+import asyncio
+import random
+
+import config
+from services import llm
+from utils import chat_archive, persona_llm
+from utils.output_filter import is_clean
+
+description = (
+    "Talk to an AI persona of a chatter (natural mode), built from their chat "
+    "history (this channel's when they have enough) and the live conversation. "
+    "model= forces a configured model.\n"
+    "  ~persona <user> [message] [model=llama|lora]"
+)
+
+
+def _stop_followup(text):
+    return (text or "").strip().upper() in {"STOP", "NO", "NONE"}
+
+
+async def _run(bot, message, params, mode):
+    command = "hyper" if mode == "hyper" else "persona"
+    if not params:
+        await message.channel.send(f"Usage: ~{command} <user> [message]")
+        return
+
+    # Flags are LEADING-only: once the free-text message starts, '=' is just
+    # text ("what is 2+2=x" never parses as a flag). Supported flags:
+    # model=llama|lora, anon=true (don't tell the persona who's asking).
+    override = None
+    anonymous = False
+    i = 0
+    while i < len(params):
+        low = params[i].lower()
+        if low.startswith("model="):
+            override = persona_llm.resolve_model(low.split("=", 1)[1])
+        elif low.startswith("anon="):
+            anonymous = low.split("=", 1)[1] in ("true", "1", "yes", "on")
+        else:
+            break
+        i += 1
+    params = params[i:]
+    if not params:
+        await message.channel.send(f"Usage: ~{command} <user> [message] [model=lora]")
+        return
+    user = params[0].lstrip("@")
+    if not chat_archive.message_count_for(user):
+        await message.channel.send(f"~{command} unavailable for {user}: no archived messages.")
+        return
+    said = " ".join(params[1:]) or None
+    invoker = message.author.name if message.author else None
+    # 'smoke' is in the prompt's internal-caller list -> persona sees
+    # "Someone says to you" instead of the asker's name
+    prompt_invoker = "smoke" if anonymous else invoker
+    out = await persona_llm.generate_with_retry(
+        user, message.channel.name, said, mode=mode,
+        invoked_by=prompt_invoker,
+        model_override=override,
+        prioritize_direct_response=bool(said))
+    if not out:
+        rejection = persona_llm.last_rejection()
+        if rejection:
+            await message.channel.send(
+                f"~{command} produced no safe, original reply for {user}. Retry."
+            )
+        elif llm.failure_kind():
+            await message.channel.send(llm.failure_message(command))
+        else:
+            await message.channel.send(
+                f"~{command} produced no usable reply for {user}. Retry."
+            )
+        return
+
+    if not is_clean(out):
+        persona_llm.log_event({
+            "type": "output_filtered", "author": user, "mode": mode,
+            "channel": message.channel.name, "invoked_by": invoker,
+            "user_message": said, "text": out,
+        })
+        out = await persona_llm.generate_with_retry(
+            user, message.channel.name, said, mode=mode,
+            invoked_by=prompt_invoker, model_override=override,
+            prioritize_direct_response=bool(said))
+        if not out or not is_clean(out):
+            if out:
+                persona_llm.log_event({
+                    "type": "output_filtered", "author": user, "mode": mode,
+                    "channel": message.channel.name, "invoked_by": invoker,
+                    "user_message": said, "text": out,
+                })
+            await message.channel.send(f"~{command} blocked a filtered reply for {user}. Retry.")
+            return
+
+    if len(out) > 480:
+        out = out[:479] + "..."
+    tag = persona_llm.last_model_tag()
+    prefix = f"#{tag} " if tag else ""
+    await message.channel.send(f"🎭 {prefix}{user}: {out}")
+    from utils import reaction_tracker
+    reaction_tracker.watch(message.channel.name, out,
+                           {"kind": "persona", "persona": user, "mode": mode,
+                            "model_tag": tag})
+    await _maybe_continue(message, user, said, out, mode)
+
+
+async def _maybe_continue(message, user, original_prompt, previous_line, mode):
+    chance = getattr(config, "PERSONA_COMMAND_CONTINUE_CHANCE", 0.0)
+    max_lines = max(0, getattr(config, "PERSONA_COMMAND_MAX_CONTINUATIONS", 0))
+    if chance <= 0 or max_lines <= 0:
+        return
+
+    last_line = previous_line
+    for _ in range(max_lines):
+        if random.random() >= chance:
+            break
+        await asyncio.sleep(getattr(config, "PERSONA_COMMAND_CONTINUE_DELAY", 1.5))
+        follow_prompt = (
+            f'Original message to you: "{original_prompt or ""}"\n'
+            f'You just said: "{last_line}". Decide if {user} would naturally '
+            f"send one immediate second chat message that continues the SAME "
+            f"thought. If yes, output only that short follow-up. If no coherent "
+            f"follow-up is natural, output exactly STOP. Do not change topic. "
+            f"No username, speaker label, colon prefix, preface, or line break."
+        )
+        follow = await persona_llm.generate(
+            user,
+            message.channel.name,
+            follow_prompt,
+            mode=mode,
+            exemplar_count=getattr(config, "LLM_RETRY_EXEMPLARS", 60),
+            context_count=getattr(config, "LLM_RETRY_CONTEXT", 12),
+        )
+        if not follow or _stop_followup(follow) or not is_clean(follow):
+            break
+        if len(follow) > 480:
+            follow = follow[:479] + "..."
+        tag = persona_llm.last_model_tag()
+        prefix = f"#{tag} " if tag else ""
+        await message.channel.send(f"↳ 🎭 {prefix}{user}: {follow}")
+        last_line = follow
+
+
+async def handle_persona(bot, message, params):
+    await _run(bot, message, params, mode="normal")

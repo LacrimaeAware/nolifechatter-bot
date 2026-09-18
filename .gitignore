@@ -1,0 +1,80 @@
+# ---------------------------------------------------------------------------
+# Privacy / secrets - NEVER commit these.
+# ---------------------------------------------------------------------------
+# Quarantined original server backup and any private material.
+_private/
+
+# Local user configuration (channel names, admins).
+config.toml
+
+# Environment / secrets.
+.env
+.env.local
+.env.*.local
+
+# Credentials & tokens.
+*.json.key
+**/google-service-account.json
+**/token_data.json
+**/auto-translate-*.json
+
+# Runtime data: the settings DB contains real usernames (PII).
+data/synced/*
+data/unsynced/*
+!data/synced/.gitkeep
+!data/unsynced/.gitkeep
+*.db
+*.sqlite
+*.sqlite3
+
+# TLS / certificate material.
+*.pem
+*.crt
+*.key
+*.csr
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Distribution / packaging (root only: tools/build/ is source)
+/build/
+/dist/
+*.egg-info/
+*.egg
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.python-version
+
+# ---------------------------------------------------------------------------
+# Editors / OS
+# ---------------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Stop marker written by the stop launchers.
+data/STOP
+
+# Logs (including rotated bot.log.1, bot.log.2, ...)
+*.log
+*.log.*
+# The synthetic Chatterino logs used by the examples walkthrough are tracked.
+!examples/sample-logs/**/*.log
+data/unsynced/obsession_df_v2.json

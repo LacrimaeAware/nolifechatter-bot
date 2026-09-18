@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "nolifechatter"
+version = "0.1.0"
+description = "Twitch bot for live translation, a searchable chat archive and chat personas built from your own logs."
+authors = ["LacrimaeAware"]
+license = "MIT"
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+twitchio = "2.10.0"           # exact: chatbot.py reaches into 2.10 private token attributes
+python-dotenv = "^1.0.1"
+requests = "^2.32.3"
+aiohttp = "^3.9.5"
+google-cloud-translate = "^3.15.3"
+psutil = "^7.2.0"
+lingua-language-detector = "^2.0.0"   # free, local language detection (no API cost)
+scikit-learn = "^1.9.0"
+numpy = "^2.4.0"
+# Romanization engines (practice mode)
+pykakasi = "^2.2.1"      # Japanese
+pythainlp = "^5.0.0"     # Thai
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
