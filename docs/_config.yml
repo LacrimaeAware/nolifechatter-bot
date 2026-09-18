@@ -1,0 +1,21 @@
+# GitHub Pages config. Set the Pages source to the /docs folder: docs/index.html
+# is the showcase page and the reference Markdown files render as themed pages.
+title: NoLifeChatter
+description: >-
+  A Twitch bot for live translation, a searchable local chat archive and
+  chat personas built from your own logs (Markov, retrieval, optional local LLM).
+theme: jekyll-theme-cayman
+# Only the reference docs are published. Working notes and archived material
+# stay out of the site even when they exist in the checkout.
+exclude:
+  - archive/
+  - GROUND_TRUTH.md
+  - STATE_OF_OPERATION.md
+  - ROADMAP.md
+  - IDEA_BANK.md
+  - CHAT_PERSONALITY_RESEARCH.md
+  - INVESTIGATION_LOG.md
+  - PERSONALITY_SYSTEM_DESIGN.md
+  - RESEARCH_TO_APPLIED.md
+  - RUNPOD_FINE_TUNE_README.txt
+  - README.md
