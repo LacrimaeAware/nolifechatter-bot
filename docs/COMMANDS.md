@@ -95,9 +95,9 @@ which can return results without a model.
 | `~emote <emote> [raw]` | anyone | Summarize an emote's inferred meaning. `raw` shows registry information, sampled usage contexts, neighbouring emotes and cached trait scores. |
 | `~explain emote <emote> [raw]` | anyone | Another way to run `~emote` through the `~explain` command. |
 | `~irony [user=<name>] [chat=here\|all] <message>` | anyone | Estimate whether a message is ironic using its wording, repeated phrases, unusual literal claims and agreement or conflict with the user's past messages. |
-| `~funny <user>` | anyone | Score how many new people laugh in roughly 30 seconds after a message compared with before it. Rapid fragments by one author count as one setup; self, bot and noise reactions are excluded, and each laugher counts once across chats. |
+| `~funny <user>` | anyone | Count other chatters with laughter markers in roughly 30 seconds after a message who were not responding with laughter markers before it. Rapid fragments are grouped, self/bot/noise responses are excluded, and repeat responses are downweighted. |
 | `~funny top [n]` / `~funny bottom [n]` | anyone | Rank chatters from highest or lowest `~funny` score across the configured chats. |
-| `~ragebait <user> [topic]` | anyone | Generate a one-sentence jab about a chatter, using a conversation from their home chats or a recurring habit. A topic (`~ragebait bob twin primes`) narrows the source material. The model outlines the event before writing the joke; output checks reject invented quotes and jokes that need missing context. |
+| `~ragebait <user> [topic]` | anyone | Ask a local model for a short jab using repeated-term counts or retrieved chat excerpts. A topic (`~ragebait bob twin primes`) narrows archive retrieval. |
 | `~ragebait ref [n]` | anyone | Show the source for the last ragebait in this chat; `n=2` shows the one before. No model call. |
 
 These commands compare patterns in archived messages. The scores depend on
@@ -119,7 +119,7 @@ the messages and channels included.
 | `~unbanuser <name>` | super admin | Remove a command ban. |
 | `~warnings [n]` | super admin | Review recent anti-spam cooldown offenses (the escalating cooldowns described below). |
 | `~model [status\|off\|on\|clear]` | super admin | Show or clear the local-model queue, or turn model calls on or off. Turning them off clears pending work; a running command finishes. `[llm] enabled = false` sets the startup default. `~modelqueue` is an unlisted alias. |
-| `~announce [now [chat]]` | super admin | Show the schedule for configured reminder posts, or post now. `[announce]` sets channels, message and timing: at most `max_per_day` posts in a rolling 24 hours, at least `min_gap_hours` apart, with a randomized extra wait. Posts only in active chats; an empty `channels` list disables scheduled posts. |
+| `~announce [now [chat]]` | super admin | Show the configured reminder schedule, or post now. Automatic posts use `[announce] max_per_day`, `min_gap_hours` and a randomized wait; recent-message checks delay posts during quiet periods. An empty `channels` list disables scheduled posts. |
 | `~gojomons` | super admin | Post the project-site link (config `[announce] site_url`) in the chat it's called in. |
 | `~axismerge <canonical> <dup> [flip]` | super admin | Merge duplicate trait scales (`flip` reverses the second scale). `~axismerge del <axis>` deletes a scale; `~axismerge list` shows saved scales. The admin chooses which scales to merge. |
 

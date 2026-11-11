@@ -109,8 +109,7 @@ models folder, load it, and terminate the pod.
 - Defaults in `train_persona_lora_unsloth.py`: 1 epoch, rank 16, learning rate
   2e-4, sequence length 2048, effective batch 16 (`batch_size=2`,
   `grad_accum=8`), 5% validation split from the exporter, checkpoint every 100
-  steps. A pilot of 41k training rows took about 2,580 optimizer steps at
-  roughly 2.4 s per step on an RTX 4090.
+  steps.
 - A Network Volume mounted at `/workspace` preserves caches, checkpoints and
   the adapter across pod restarts.
 

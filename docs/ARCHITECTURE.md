@@ -1,9 +1,8 @@
 # Architecture
 
-NoLifeChatter is one Python process built on TwitchIO 2.10. It has two
-capabilities that share a small core and one SQLite archive. Either capability
-can be used without the other: a translation-only bot never needs a model
-server, and the archive tools run without a Twitch connection.
+NoLifeChatter is one Python process built on TwitchIO 2.10. Translation,
+archive search and persona generation share configuration, message routing
+and a SQLite archive.
 
 | Capability | What it does | Where it lives |
 | --- | --- | --- |
@@ -102,7 +101,8 @@ configured site link.
 `experiments/finetune/` is the LoRA path (export training data from the
 archive, train on a rented GPU, merge to GGUF); see
 [FINE_TUNING.md](FINE_TUNING.md). `experiments/eval/` holds the evaluation
-harnesses listed in [RESEARCH_QUESTIONS.md](RESEARCH_QUESTIONS.md).
+tools for comparing models and generated replies, described in
+[FINE_TUNING.md](FINE_TUNING.md#4-use-and-compare).
 
 ## Operations
 
@@ -178,7 +178,7 @@ vectors need the server.
 | `data/unsynced/persona_embeddings.pkl` | `tools/build/build_persona_embeddings.py` | `~vibes`, `~twin`, trait averages |
 | `data/unsynced/msg_index/` | `tools/build/build_message_index.py` | author-scoped `~askchat`, `~why`, burst `~top`, semantic persona retrieval |
 | `data/unsynced/fact_bank.jsonl` | `tools/build/build_fact_bank.py` | `~askchat`, offline archive questions |
-| `data/unsynced/user_profiles.json` | `tools/build/build_user_profiles.py` | confirmed persona facts, `~askchat`, irony history checks |
+| `data/unsynced/user_profiles.json` | `tools/build/build_user_profiles.py` | recorded profile claims, `~askchat`, irony history checks |
 | `data/unsynced/emote_semantics.pkl` + `data/unsynced/emote_tag_vecs.pkl` | `tools/build/build_emote_semantics.py` + emote tag-vector tooling | `~emote`, `~explain emote`, `~why emote` |
 
 Use `~artifacts` or `python tools/check/artifact_status.py` to check whether these
@@ -191,3 +191,20 @@ For an unattended run, use `scripts/windows/10-rebuild-persona-artifacts-backgro
 writes stdout/stderr logs under `data/unsynced`.
 Embeddings and indexes use merged utterances by default;
 `--semantic-unit message` indexes messages separately.
+
+## Project page
+
+Build the static page from the repository root:
+
+```sh
+python -m pip install -r tools/build/requirements-site.txt
+python tools/build/build_site.py
+```
+
+The output is `site/`. A local preview uses:
+
+```sh
+python -m http.server 8000 --bind 127.0.0.1 --directory site
+```
+
+Open `http://127.0.0.1:8000`.

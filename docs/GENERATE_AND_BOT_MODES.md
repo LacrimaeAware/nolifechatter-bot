@@ -10,7 +10,7 @@ The persona engine prepares a prompt from the chatter's saved messages,
 topic matches, short conversation snippets and recent channel chat. A stable
 sample supplies recurring writing habits; retrieved examples supply context.
 Semantic matches can supplement keyword search when the message index is
-configured. Corroborated self-statements from the profile builder are included
+configured. Recorded profile claims from the profile builder are included
 when available.
 
 For `~persona`, the engine can sample several replies. Candidate checks look

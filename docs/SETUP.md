@@ -129,8 +129,8 @@ dependencies for `poetry install` if you prefer Poetry.
 7. Fine-tuning a voice model is a separate offline path; see
    [FINE_TUNING.md](FINE_TUNING.md).
 
-The walkthrough in [../examples/README.md](../examples/README.md) runs steps 1
-to 4 on the synthetic log and shows the exact output.
+The [walkthrough](../examples/README.md) shows search results, selected persona
+context and Markov messages from the synthetic logs.
 
 ## 4. Config toggles
 

@@ -1,13 +1,10 @@
-# Example: import, search and generate messages
+# Chat archive and persona context example
 
 `sample-logs/examplechat/` contains two Chatterino-format logs with invented
 messages and usernames (`chatter_01` to `chatter_06` and `examplebot`). They
 include chat, header, system and moderation lines.
 
-Run the commands below from the repository root with the project's virtual
-environment active. They need `config.toml` (copy `config.example.toml`; the
-defaults are fine) and nothing else: no Twitch connection, no model server.
-The archive is created at `data/unsynced/chat_archive.db`.
+[Setup](../docs/SETUP.md) describes the command environment and configuration.
 
 ## Ingest the logs
 
@@ -15,7 +12,7 @@ The archive is created at `data/unsynced/chat_archive.db`.
 python tools/archive/ingest_chatterino.py examples/sample-logs
 ```
 
-Output (the timestamp at the start of each log line is omitted here):
+Import summary:
 
 ```text
 INFO - examplechat: +122 messages (-> channel 'examplechat')
@@ -25,13 +22,8 @@ INFO - Archive now: 122 messages, 7 authors, 1 channels (data/unsynced/chat_arch
 
 The two `# Start logging` / `# Stop logging` pairs are headers, `connected` and
 `joined channel` lines are system lines, and the two `chatter_05 timed out ...`
-lines are moderation actions that look like chat and are filtered out. Running
-the same command again skips both files:
-
-```text
-INFO - Done. files=2 (skipped 2 unchanged) | messages=0 system=0 headers=0 empty=0 modactions=0
-INFO - Archive now: 122 messages, 7 authors, 1 channels (data/unsynced/chat_archive.db)
-```
+lines are moderation actions that look like chat and are filtered out.
+Unchanged files are skipped on later imports.
 
 ## Search the archive
 
@@ -95,22 +87,13 @@ replies.
 
 `~persona chatter_01 <message>` supplies a local model with examples from the
 chatter's history: a random sample, topic matches and short conversation
-snippets. This tool prints the selected evidence without calling a model:
+snippets. The context selector prints those messages:
 
 ```sh
 python tools/archive/persona_rag_preview.py chatter_01 sourdough --seed 7 --show-relevant 5 --show-signature 5 --show-snippets 3
 ```
 
 ```text
-User: chatter_01
-Canonical author: chatter_01
-Author keys searched: chatter_01 (60)
-Exemplar budget: 150
-Selected: 58 random signature + 0 flat relevant + 2 snippets
-Retrieval terms: sourdough
-Semantic retrieval: off
-Directed query: sourdough
-
 Chat-moment snippets (2 of 2):
    1. chatter_02: gg ez
 chatter_03: what are we baking today
@@ -123,9 +106,6 @@ chatter_06: that is a bakery loaf
 chatter_04: que rico
 chatter_01: next loaf gets some rye in the mix for flavor
 
-Relevant examples (0 of 0):
-  (none)
-
 Random signature examples (5 of 58):
    1. crumb reveal time breadChamp
    2. boat skip dropped again, the timing window is two frames
@@ -134,13 +114,13 @@ Random signature examples (5 of 58):
    5. about a week if your kitchen is warm, two if it is cold
 ```
 
-The two sourdough matches appear as snippets, with `>>` marking the matched
-line. The budget of 150 exemplars comes from `[llm] exemplars`. This example
-uses keyword retrieval; the optional message-vector index adds semantic matches.
+The excerpt pairs the two sourdough matches with nearby messages; `>>` marks
+the matched line. Other saved messages supply writing examples. Keyword search
+selects this example's topic matches; the message-vector index adds semantic matches.
 
-## Optional Markov baseline
+## Markov messages
 
-For comparison, the no-model generator uses a word-level Markov chain over everything the chatter wrote. It needs at least
+The Markov generator uses word patterns from the chatter's saved messages. It needs at least
 40 archived messages. `--seed` makes the sample reproducible; without it every
 run differs.
 
@@ -159,7 +139,7 @@ python tools/archive/persona_preview.py chatter_01 5 --seed 7
 With the bot running, `~markov chatter_01` posts one such line after the
 output filter has checked it.
 
-## Use a model with the bot
+## Model reference
 
 - For model personas, run LM Studio with a chat model and use
   `~persona <user> [message]`; [Setup](../docs/SETUP.md) covers the switches.
