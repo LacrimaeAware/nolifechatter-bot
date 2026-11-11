@@ -24,7 +24,7 @@ local model personas and embedding-based analysis.
 The bot replies to commands in the channels it joins. The archive tools can
 also run offline, without Twitch or a model server.
 
-[Project page setup](#build-the-project-page) · [Model personas](docs/GENERATE_AND_BOT_MODES.md)
+[Project page](https://lacrimaeaware.github.io/nolifechatter-bot/) · [Model personas](docs/GENERATE_AND_BOT_MODES.md)
 · [Indexes and analysis](docs/ARCHITECTURE.md#analysis-data-files)
 · [Optional LoRA training](docs/FINE_TUNING.md)
 
