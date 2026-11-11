@@ -1,17 +1,11 @@
-"""Build LLM-verified user profiles v5 - see utils/user_profiles.py.
+"""Build user-claim profiles with the configured chat model as extraction judge.
 
-Needs LM Studio up (uses the local chat model as the sincerity/extraction
-judge). Incremental: judged messages are cached, so re-running only pays for
-new evidence - safe to run repeatedly, e.g. as a dead-hours batch.
+Judged messages are cached. Output: data/unsynced/user_profiles.json.
 
-    python tools/build/build_user_profiles.py name1 name2       # just these
-    python tools/build/build_user_profiles.py --roster 20       # top-N analysis cohort
-    python tools/build/build_user_profiles.py name --dry-run    # retrieval only, no LLM
-    python tools/build/build_user_profiles.py name --show       # print stored profile
-
-Output: data/unsynced/user_profiles.json (gitignored - real people, owner's
-eyes only; never paste into tracked docs).
-"""
+    python tools/build/build_user_profiles.py name1 name2
+    python tools/build/build_user_profiles.py --roster 20
+    python tools/build/build_user_profiles.py name --dry-run    # retrieval only
+    python tools/build/build_user_profiles.py name --show       # stored profile"""
 
 from __future__ import annotations
 
@@ -20,7 +14,7 @@ import json
 import os
 import sys
 
-# chat lines contain emoji; never let a cp1252 console kill a paid-for run
+# Use UTF-8 for archive text and emoji.
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -101,7 +95,7 @@ def main() -> int:
         confirmed = sum(1 for s in prof.values()
                         if s.get("status") == "confirmed"
                         or any(v["status"] == "confirmed" for v in s.get("values", [])))
-        print(f"{author}: {len(prof)} slots resolved, {confirmed} with confirmed facts")
+        print(f"{author}: {len(prof)} slots resolved, {confirmed} with confirmed status")
         line = user_profiles.profile_line(author)
         if line:
             print(f"  prompt line: {line}")

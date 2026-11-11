@@ -1,15 +1,10 @@
-"""Build per-chatter semantic vectors from a local embedding model.
+"""Build per-author mean embedding vectors for similarity and trait-axis scores.
 
-The token-statistics layer (~markers/~like) can only see which exact words
-someone overuses; this is the semantic layer that sees what they talk ABOUT.
-For every voice-profile roster author: sample their usable utterances, embed
-each via LM Studio's /v1/embeddings (config [llm] embed_model - runs fully
-local), mean-pool into one L2-normalized person vector, and store the lot in
-a gitignored pickle. Downstream: semantic ~like / ~vibes, clustering for the
-personality-map idea, trait axes (docs/CHAT_PERSONALITY_RESEARCH.md).
+Sample usable messages or utterances, embed through the configured endpoint,
+then mean-pool and L2-normalize each author vector. Store vectors in
+data/unsynced/persona_embeddings.pkl.
 
-    python tools/build/build_persona_embeddings.py [--per-author 3000] [--report]
-"""
+    python tools/build/build_persona_embeddings.py [--per-author 3000] [--report]"""
 
 import argparse
 import json
@@ -55,12 +50,9 @@ def _semantic_units(author: str, unit: str) -> list[str]:
 
 
 def person_vector(author, per_author, rng, unit="utterance"):
-    """Mean-pooled, L2-normalized embedding of a sample of their messages.
+    """Mean-pool and L2-normalize a sample of cleaned messages or utterances.
 
-    Emote tokens and URLs are stripped BEFORE embedding and a message must
-    still carry >=4 real words - the semantic layer should embed meaning;
-    emote usage is its own profile channel. (One-emote lines taught the old
-    vectors nothing and diluted everyone toward the same point.)"""
+    Semantic-text filtering removes URLs and emote tokens and requires four words."""
     import numpy as np
     msgs = _semantic_units(author, unit)
     if len(msgs) < 30:
@@ -75,7 +67,7 @@ def person_vector(author, per_author, rng, unit="utterance"):
 
 
 def person_vector_from_index(author, per_author, unit="utterance"):
-    """Mean the unbiased coverage lane from the shared semantic index."""
+    """Mean-pool coverage rows from the shared semantic index."""
     import numpy as np
 
     path = os.path.join(INDEX_DIR, f"{chat_archive.normalize_author(author)}.npz")

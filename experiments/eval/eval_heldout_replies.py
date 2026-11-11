@@ -1,21 +1,12 @@
-"""Held-out reply eval for the persona engine.
+"""Compare generated replies with held-out messages from archived chat moments.
 
-This is the benchmark the persona docs kept asking for: find real moments
-where a chatter spoke, hide their actual message, feed only the preceding chat
-context to the normal persona generator, then score the generated line against
-the real held-out reply.
-
-Default mode only samples cases and writes private JSONL, so it is safe to run
-without LM Studio:
+Sample a target reply and its preceding context. Generation excludes that
+target message from retrieval while retaining the persona engine's other
+archive examples. Default mode samples cases without calling the chat model.
+Outputs default to data/unsynced/persona_heldout_eval.*.
 
     python experiments/eval/eval_heldout_replies.py --sample-only
-
-Run the actual local-model eval when LM Studio is up:
-
-    python experiments/eval/eval_heldout_replies.py --generate --authors user1,user2
-
-Outputs default to data/unsynced/persona_heldout_eval.* and must stay private.
-"""
+    python experiments/eval/eval_heldout_replies.py --generate --authors user1,user2"""
 
 from __future__ import annotations
 

@@ -2,7 +2,7 @@ from commands.said import saidnext
 
 description = (
     "Show the next page of your last ~said search. The saved search expires "
-    "after about 60 seconds.\n"
+    "after 10 minutes without paging.\n"
     "  ~saidnext"
 )
 

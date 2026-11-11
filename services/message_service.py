@@ -64,10 +64,7 @@ def _looks_english(text: str) -> bool:
 
 
 def _no_real_word(text: str) -> bool:
-    """True when nothing in the message is a translatable word. A 'real word'
-    needs >=3 letters, a vowel, AND >=3 distinct letters - so short/vowelless
-    abbreviations (kk, zg, hmh, 'oh in hs bg') AND low-diversity repetition spam
-    (Kekekeke, hahaha, lolol, aaaa) all count as nothing-to-translate."""
+    """Return True when no token passes the length, vowel and distinct-letter checks."""
     for tok in (text or "").split():
         w = re.sub(r"[^a-zA-Zà-ÿ]", "", tok).lower()
         if len(w) >= 3 and len(set(w)) >= 3 and any(c in _VOWELS for c in w):
@@ -76,11 +73,7 @@ def _no_real_word(text: str) -> bool:
 
 
 def _near_identical(original: str, translation: str, thresh: float = 0.90) -> bool:
-    """True when a 'translation' adds nothing over the original - same text once
-    case, punctuation and accents are ignored (typo fixes like rednekc->redneck,
-    diacritics like Kysucke->Kysucké, apostrophe/capitalization). Restores the old
-    'don't post a near-identical translation' heuristic that regressed to a plain
-    exact-string check."""
+    """Compare case-, punctuation- and accent-normalized text using a similarity cutoff."""
     a, b = _fold_for_compare(original), _fold_for_compare(translation)
     if not a or not b:
         return True
@@ -182,18 +175,7 @@ def remove_at_words(text):
     return re.sub(r"@\S+", "", text).lstrip()
 
 def strip_emote_like_tokens(text):
-    """Drop tokens that look like emote names rather than words.
-
-    Emotes not in the fetched 7TV/BTTV/FFZ lists (and native Twitch emotes,
-    which the bot doesn't enumerate) reach detection as plain text, and both
-    lingua and DeepL treat them as foreign words - e.g. "CuldBeWorthIt" detects
-    as German 0.63 and DeepL turns it into "Is It Worth It?". Such names are
-    structurally distinct from real words: an internal capital (CamelCase, like
-    "CuldBeWorthIt" / "hesRight") or a long all-caps run with no spaces (like
-    "TELLMEHEDIDNTJUSTSAYTHAT"). Ordinary chat words - including Title Case and
-    short shouting - don't look like that, so dropping these before detection is
-    safe and keeps any real words around them.
-    """
+    """Drop tokens matching the CamelCase or long-uppercase emote-name heuristics."""
     kept = []
     for tok in text.split():
         core = tok.strip('.,!?;:()[]')
@@ -261,7 +243,7 @@ class MessageService:
 
     # lang utilities
     def detect_lang(self, text):
-        # Local, free detection (no API cost). Translation still uses Google.
+        # Detect locally; translation requests use the configured translation clients.
         return detect_language(text)
 
     async def gtranslate(self, text, target):
@@ -367,7 +349,7 @@ class MessageService:
         authors.appendleft(lowered)
 
     def _resident_topic_affinity(self, state, content):
-        """Cheap organic-interest signal: did this persona talk about this topic?"""
+        """Score archive keyword coverage for a possible persona reply."""
         from utils import chat_archive
 
         persona = state.get("persona") or ""
@@ -809,7 +791,7 @@ class MessageService:
         if not msg[0].isalpha():
             return
 
-        # scrub URLs so links are never reposted
+        # Replace URL-like substrings before translation.
         msg = re.sub(r'\b(?:https?://)?\S+\.\S+\b', '***', msg)
 
         # ===== PRACTICE MODE (CSV in learn_lang, separate whispers) =====
@@ -895,9 +877,7 @@ class MessageService:
             if user_settings.get('translation_enabled'):
                 target = user_settings.get('translation_language', 'EN')
                 t = await self.gtranslate(msg, target)
-                # Only output a real, *meaningfully different* translation - never
-                # echo the original, a near-identical typo/diacritic fix, or an
-                # error string.
+                # Filter missing results, error markers and near-identical text.
                 if t and not _near_identical(msg, t):
                     mode = user_settings.get('output_mode', 'default')
                     await self.output_message(message, t, mode, user_settings)
@@ -927,14 +907,11 @@ class MessageService:
     async def handle_translation_if_needed(self, message, text, target_language):
         if not self.can_translate or not text:
             return
-        # super-admin opt-out: never auto-translate these users (they write
-        # English slang the detector misreads as foreign). ~notranslate.
+        # Skip authors on the automatic-translation opt-out list (~notranslate).
         if message.author and translate_optout.is_opted_out(message.author.name):
             return
 
-        # Content guards BEFORE trusting the detector: an English sentence with one
-        # foreign-looking word, or a message with no real word (abbreviations /
-        # gibberish like "kk", "oh in hs bg"), should never be auto-translated.
+        # Apply English-word and token-pattern filters before language detection.
         if _looks_english(text) or _no_real_word(text):
             return
 
@@ -956,8 +933,7 @@ class MessageService:
         if not best_lang:
             return
 
-        # If the target language is the best (or tied) guess, it's the target /
-        # too ambiguous -> never translate (this is what stops English & emotes).
+        # Skip when target-language confidence is at least the highest confidence.
         if target_conf >= best_conf:
             return
 
@@ -978,10 +954,7 @@ class MessageService:
             and foreign_share >= config.MIN_FOREIGN_SHARE
         )
 
-        # Build the speaker profile - but ONLY from LONG confidently-foreign
-        # sentences (>= SPEAKER_LONG_WORDS words). Short/garbage misdetections
-        # must never accumulate toward speaker status (that is what wrongly
-        # flagged everyone as a Hungarian/Latin/German speaker).
+        # Update speaker counts only above the confidence and minimum-word thresholds.
         if confidently_foreign and len(text.split()) >= config.SPEAKER_LONG_WORDS:
             record_language(user_id, best_lang)
 
@@ -1001,10 +974,7 @@ class MessageService:
         words = len(text.split())
         if not has_non_latin:
             massive = is_massive_speaker(user_id, best_lang)
-            # SINGLE-WORD messages never auto-translate unless the author is a
-            # MASSIVE (SPEAKER_MASSIVE_COUNT+ long-sentence) speaker of the
-            # detected language. This is what finally kills "kekeke"/"lmaoq"/"kk":
-            # they detect as confidently foreign, but one word is never enough.
+            # Require the higher speaker-count threshold for single-word Latin-script text.
             if words < 2 and not massive:
                 return
             # SHORT (2-3 word) messages need either a strong absolute detection

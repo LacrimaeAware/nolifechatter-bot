@@ -10,7 +10,7 @@ description = (
     "Talk to an AI persona of a chatter (natural mode), built from their chat "
     "history (this channel's when they have enough) and the live conversation. "
     "model= forces a configured model.\n"
-    "  ~persona <user> [message] [model=llama|lora]"
+    "  ~persona [model=llama|lora] <user> [message]"
 )
 
 
@@ -41,7 +41,7 @@ async def _run(bot, message, params, mode):
         i += 1
     params = params[i:]
     if not params:
-        await message.channel.send(f"Usage: ~{command} <user> [message] [model=lora]")
+        await message.channel.send(f"Usage: ~{command} [model=lora] <user> [message]")
         return
     user = params[0].lstrip("@")
     if not chat_archive.message_count_for(user):
@@ -61,7 +61,7 @@ async def _run(bot, message, params, mode):
         rejection = persona_llm.last_rejection()
         if rejection:
             await message.channel.send(
-                f"~{command} produced no safe, original reply for {user}. Retry."
+                f"~{command} produced no reply passing its response checks for {user}. Retry."
             )
         elif llm.failure_kind():
             await message.channel.send(llm.failure_message(command))

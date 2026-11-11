@@ -116,7 +116,7 @@ _co = _cfg.get("comedy", {})
 COMEDY_CHANNELS: list[str] = [c.lower() for c in _co.get("channels", [])]
 
 # ----------------------------- analysis cohort ----------------------------
-# Cohort-relative artifacts (classifier, semantic vectors, IQ, facts, and
+# Cohort-relative artifacts (classifier, semantic vectors, facts, and
 # verified profiles) must all describe the same community. An explicit
 # [analysis] section wins; falling back to the comedy chats preserves the
 # long-standing definition of the conversational community for old configs.
@@ -146,11 +146,7 @@ ANNOUNCE_SITE_URL: str = str(_ann.get("site_url", "")).strip()
 ANNOUNCE_MIN_GAP_HOURS: float = float(_ann.get("min_gap_hours", 8))
 ANNOUNCE_MAX_PER_DAY: int = int(_ann.get("max_per_day", 2))
 # "Active chat" gate: at least this many archived messages in the channel in
-# the last activity_window_min minutes (0 disables the gate). Calibrated on a
-# week of real traffic in the small conversational chat this runs in
-# (2026-07-21): >=2 in 30min passes 57% of 5-min checkpoints and simulates to
-# ~1.8 posts/day; the original 5-in-10min stream-chat guess passed only 24%
-# (2% on a quiet day) and starved the announcer.
+# the last activity_window_min minutes (0 disables the gate).
 ANNOUNCE_ACTIVITY_MIN_MESSAGES: int = int(_ann.get("activity_min_messages", 2))
 ANNOUNCE_ACTIVITY_WINDOW_MIN: int = int(_ann.get("activity_window_min", 30))
 
@@ -219,8 +215,8 @@ ARCHIVE_CHANNEL_ALIASES: dict = dict(_ar.get("channel_aliases", {}))
 
 # ------------------------------- personas --------------------------------
 # Persona features (docs/GENERATE_AND_BOT_MODES.md). The ~markov/~mimic commands
-# post a Markov-generated line in a chatter's style; output is run through the
-# blocklist below first so the bot never posts a bannable line to Twitch.
+# post a Markov-generated line in a chatter's style, checked against the
+# configured output denylist before posting.
 _pe = _cfg.get("persona", {})
 MIMIC_ENABLED: bool = bool(_pe.get("mimic_enabled", True))
 # Chance (0..1) that any given chat message triggers a random persona reaction.
@@ -252,8 +248,7 @@ BLOCKLIST_FILE: str = _resolve(
 )
 
 # LLM persona engine (~persona / ~hyper, and optionally the random reaction).
-# Points at any OpenAI-compatible chat endpoint - LM Studio's local server by
-# default (free, local, private). Leave it; just run LM Studio with a model.
+# OpenAI-compatible chat endpoint; LM Studio's local server is the default.
 LLM_ENABLED: bool = bool(_llm.get("enabled", True))
 LLM_ENDPOINT: str = _llm.get("endpoint", "http://127.0.0.1:1234/v1/chat/completions")
 LLM_MODEL: str = _llm.get("model", "local")  # LM Studio uses whatever's loaded
@@ -289,8 +284,7 @@ LLM_RETRY_CONTEXT: int = int(_llm.get("retry_context_messages", min(12, LLM_CONT
 # the relevant budget. 0 disables snippets.
 LLM_SNIPPET_HITS: int = int(_llm.get("snippet_hits", 8))
 # Samples per reply; the best valid one is posted (copies/URLs/echoes of other
-# chatters' lines are rejected). The big prompt is server-cached, so extra
-# samples are much cheaper than the first.
+# chatters' lines are rejected).
 LLM_CANDIDATES: int = int(_llm.get("candidates", 2))
 # Private JSONL log of every persona generation: evidence fed, all candidates
 # with rejection reasons, final output, timing. Lives in a gitignored dir.

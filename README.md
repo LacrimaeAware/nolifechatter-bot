@@ -1,25 +1,39 @@
 # NoLifeChatter
 
-A Twitch bot with two separate capabilities that share one process and one
-SQLite archive:
+A Twitch translation bot with language practice, chat history tools,
+local model personas and embedding-based analysis.
 
-- **A. Translation bot.** Detects the language of chat lines locally (lingua),
-  translates through DeepL or Google Cloud Translation, runs a practice mode
-  over whispers, and romanizes Japanese, Korean and Thai.
-- **B. Chat archive and personas.** Stores every message it sees, plus your
-  Chatterino logs, in SQLite with FTS5; answers `~said`, `~quote`, `~regex`,
-  `~chatstats` in chat; builds personas from a chatter's own history, either a
-  Markov version that needs no model or a retrieved-example version that
-  prompts a local OpenAI-compatible model (LM Studio by default).
+- **Model personas:** `~persona` asks a local model to reply in a chosen chatter's
+  style, using retrieved writing examples, topic matches and conversation
+  snippets. Candidate replies are checked for copying and ranked for context
+  and writing style. `~generate`
+  combines chatters, traits and topics; channel personas can respond to mentions
+  or ordinary chat.
+- **Archive questions:** `~askchat` retrieves passages and supplies them to the
+  model, with source labels. Author-scoped questions can combine keyword and
+  embedding rankings. Raw mode returns the evidence without generating an answer.
+- **Embedding analysis:** `~vibes` finds chatters with similar topics and language
+  using person vectors. `~twin` combines
+  vector similarity with word and emote use, and trait commands compare vectors
+  with text-defined scales. Building the vectors requires an embedding model.
+- **Translation and archive tools:** translate through DeepL or Google Cloud
+  Translation, practise languages through whispers, import Chatterino logs,
+  search phrases and retrieve quotes. Markov generation is also available
+  without a model.
 
-Python 3.12 or newer, TwitchIO 2.10. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-says which directory each part lives in.
+The bot replies to commands in the channels it joins. The archive tools can
+also run offline, without Twitch or a model server.
 
-## A. Run the translation bot on your channel
+[Project page setup](#build-the-project-page) · [Model personas](docs/GENERATE_AND_BOT_MODES.md)
+· [Indexes and analysis](docs/ARCHITECTURE.md#analysis-data-files)
+· [Optional LoRA training](docs/FINE_TUNING.md)
 
-You need a Twitch account for the bot, a Twitch application (client id and
-secret with `http://localhost:3000` as an OAuth redirect URL) and a DeepL API
-key (free tier) or a Google service-account file.
+## Run the bot
+
+Requires Python 3.12 or newer and a Twitch account and application for the bot.
+Translation also needs
+a DeepL API key or Google Cloud Translation credentials. See
+[Setup](docs/SETUP.md) for provider configuration and OAuth.
 
 ```sh
 python -m venv .venv
@@ -35,25 +49,27 @@ python chatbot.py
 What to expect: the bot logs in, joins `[bot] channels` and answers `~ping` and
 `~help`. Auto-translation starts switched off. A super admin turns it on with
 `~global_autotl on` and `~chan_autotl <channel> on`; chatters use `~autotl`,
-`~setlang ES`, `~practice on es,ja en`. Every step is in
-[docs/SETUP.md](docs/SETUP.md).
+`~setlang ES`, `~practice on es,ja en`.
 
-## B. Archive your chat and build a persona from your own logs
+## Try the archive offline
+
+After installing dependencies, copy `config.example.toml` to `config.toml`.
+These commands use invented chat logs and need no Twitch or model connection:
 
 ```sh
-python tools/archive/ingest_chatterino.py examples/sample-logs   # or your Chatterino Channels folder
+python tools/archive/ingest_chatterino.py examples/sample-logs
 python tools/archive/ask_archive.py said chatter_01 sourdough starter
-python tools/archive/persona_preview.py chatter_01 5 --seed 7          # Markov persona, no model
-python tools/archive/persona_rag_preview.py chatter_01 sourdough --seed 7   # retrieved examples, no model
+python tools/archive/persona_rag_preview.py chatter_01 sourdough --seed 7
 ```
 
-[examples/README.md](examples/README.md) shows the exact output of these
-commands on the synthetic log in `examples/sample-logs`. With the bot running,
-`~markov <user>` posts a Markov line, and `~persona <user> [message]` asks the
-model behind `[llm] endpoint` to answer in that chatter's voice. Live capture
-(`[archive] live_capture`) keeps the archive growing while the bot runs.
+[examples/README.md](examples/README.md) shows the output of these commands.
+The retrieval preview prints selected messages using keyword search by default.
 
-## Which switch enables what
+With a model server and the bot running, `~persona <user> [message]` asks the
+model at `[llm] endpoint` to answer in that chatter's style. Set
+`[archive] live_capture` to save new messages while the bot runs.
+
+## Settings
 
 | Capability | Switch |
 | --- | --- |
@@ -73,7 +89,27 @@ model behind `[llm] endpoint` to answer in that chatter's voice. Live capture
   [Fine-tuning](docs/FINE_TUNING.md), [Research questions](docs/RESEARCH_QUESTIONS.md).
 - Tests: `python -m unittest discover -s tests -q`, then
   `python tools/check/audit_commands.py` and `python tools/check/check_readme_commands.py`.
-- Personas recombine real chat. Use them only on logs you are allowed to use,
-  and keep `data/` private; it is gitignored.
-- [MIT license](LICENSE). Developed with AI assistance in implementation,
-  debugging and documentation; the design decisions are the author's.
+- Runtime data is stored in the gitignored `data/` folder.
+- [MIT license](LICENSE) · [Project and dependency notes](PROVENANCE.md).
+
+## Build the project page
+
+Build the static site:
+
+```sh
+python -m pip install -r tools/build/requirements-site.txt
+python tools/build/build_site.py
+```
+
+Serve the generated page locally:
+
+```sh
+python -m http.server 8000 --bind 127.0.0.1 --directory site
+```
+
+Open `http://127.0.0.1:8000`. The generated `site/` folder is a standalone
+static site.
+
+For GitHub Pages, set **Settings → Pages → Build and deployment → Source** to
+**GitHub Actions**. The **Publish project page** workflow builds and deploys
+`site/` on pushes to `main`, or through **Actions → Publish project page → Run workflow**.

@@ -14,10 +14,10 @@ if (-not $NoPrompt) {
     Write-Host "NoLifeChatter artifact rebuild ($Mode mode)"
     Write-Host ""
     Write-Host "full       = classifier, style profiles, semantic vectors, message index, claims, smoke"
-    Write-Host "cohort     = full shared-cohort rebuild, including verified profiles"
+    Write-Host "cohort     = full shared-cohort rebuild, including user-claim profiles"
     Write-Host "classifier = classifier + style profiles only"
     Write-Host "semantic   = semantic vectors + message index only"
-    Write-Host "profiles   = verified profile v5 for the top 40 active authors"
+    Write-Host "profiles   = user-claim profiles for the top 40 active authors"
     Write-Host "emotes     = top-up 2,000 emotes toward 160 usage contexts"
     Write-Host ""
     Write-Host "This starts in the background and writes logs to data\unsynced."
@@ -47,7 +47,7 @@ $ScriptArgs = switch ($Mode) {
         @(
             "tools\build\rebuild_persona_artifacts.py",
             "--semantic-unit", "utterance", "--continue-on-error",
-            "--no-message-index-force", "--iq-judge",
+            "--no-message-index-force",
             "--profile-roster", "40", "--profile-cap", "12",
             "--profile-batch-size", "12"
         )
@@ -72,12 +72,12 @@ $ScriptArgs = switch ($Mode) {
         )
         if ($Mode -eq "classifier") {
             $ArgsForPipeline += @(
-                "--skip-embeddings", "--skip-iq", "--skip-fact-bank",
+                "--skip-embeddings", "--skip-fact-bank",
                 "--skip-trait-smoke"
             )
         } elseif ($Mode -eq "semantic") {
             $ArgsForPipeline += @(
-                "--skip-classifier", "--skip-style-profiles", "--skip-iq",
+                "--skip-classifier", "--skip-style-profiles",
                 "--skip-fact-bank"
             )
         }

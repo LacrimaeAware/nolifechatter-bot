@@ -1,20 +1,6 @@
-"""Authorship classifier: given any text, who's most likely to have said it.
+"""Roster-author ranking with character- and word-ngram TF-IDF logistic regression.
 
-TF-IDF over character n-grams (style: casing, spelling, emotes, punctuation
-rhythm) + word n-grams (vocabulary/topic), into a multinomial logistic
-regression. This is the standard, strong authorship-attribution pipeline.
-
-Why TF-IDF + LR over the old Naive Bayes: NB had to cap the vocabulary at the
-most *common* features, so a rare-but-distinctive word (a niche term one chatter
-uses constantly) got dropped entirely and couldn't influence the guess. TF-IDF
-keeps rare terms and weights them by how distinctive they are, and LR learns a
-per-author weight for each - so a single signature word can carry the call.
-
-Two uses: the `~whosaid` command, and an objective persona metric (run a
-generated persona line through `classify()` and see if it reads as the target).
-LR `predict_proba` gives reasonable probabilities - a real ranking, treat the
-numbers as confidence.
-"""
+Used by ~whosaid and to rank generated candidates against a target author."""
 
 import os
 import pickle
@@ -193,12 +179,9 @@ def load():
 
 
 def classify(text, top_k=5, restrict_to=None):
-    """[(author, probability), ...] most-likely first, or [] if unusable/untrained.
-
-    restrict_to: optional iterable of authors to consider (e.g. the people
-    currently in a channel) - others are dropped and the probabilities
-    renormalized among the rest, so ~whosaid only names chatters who are here.
-    """
+    """Return [(author, model_probability), ...], ranked highest first, or []
+    when text is empty or the model file is missing. Optionally restrict labels
+    to a supplied author set and renormalize their scores."""
     if not text or not text.strip():
         return []
     try:
@@ -228,10 +211,8 @@ _KNOWN_USERS = None
 
 
 def _known_usernames():
-    """Archive authors (>=25 msgs) - tokens to exclude from voice profiles.
-    Mentioning another chatter isn't a 'signature word', it's addressing. Names
-    here are username-shaped (verified: no real-vocabulary collisions in the
-    current archive), so the only 'words' lost are other people's names."""
+    """Archived author tokens with at least 25 rows, plus configured exclusions.
+    These tokens are omitted from marker counts."""
     global _KNOWN_USERS
     if _KNOWN_USERS is None:
         conn = chat_archive.connect()
@@ -244,9 +225,7 @@ def _known_usernames():
 
 
 _MENTION_RE = re.compile(r"@([\w']+)")
-# Invisible characters chat clients hide inside words - most commonly the
-# anti-ping trick "@z<U+E0000>yrwoot", which would otherwise split into
-# "z" + "yrwoot" and leak a decapitated username into voice profiles.
+# Invisible characters inside mentions can split username tokens.
 _INVISIBLE_RE = re.compile(
     "[​-‏⁠﻿󠀀-󠁿]")
 
@@ -266,14 +245,11 @@ def _is_emote_token(tok: str) -> bool:
 
 
 def _count_tokens(msgs):
-    """(word counts, adjacent-pair counts) for voice profiles, in one pass.
-    Dropped as non-voice: URL shrapnel (https/com/youtube/status...),
-    digit-bearing tokens (@usernames like name_12), known chatter usernames,
-    and any token this corpus ever @-mentions - if you wrote "@somename" even
-    once, every bare "somename" you typed is addressing, not vocabulary (this
-    catches names that never chatted in the archive). Emotes and
-    foreign-language tics are voice - they stay. Pairs ("favorite word
-    associations") only form between surviving adjacent tokens."""
+    """Return word, pair and emote counts for marker profiles.
+
+    Remove URLs, digit-bearing tokens, archived usernames and tokens appearing
+    in @mentions. Separate emote-shaped tokens from words. Form pairs from
+    remaining adjacent tokens."""
     from collections import Counter
     users = _known_usernames()
     words, pairs, emotes = Counter(), Counter(), Counter()
@@ -408,15 +384,9 @@ def _bg_counts(bg_cap=120000, channel=None):
 
 def build_style_profiles(roster=None, words_top=300, phrases_top=150,
                          bg_cap=120000, min_messages=2000, max_roster=80):
-    """Per-author voice profile for ~like / ~markers: favorite words + favorite
-    word-pairs, scored by Fightin' Words log-odds vs one shared background and
-    weighted by panel rarity (how few roster chatters use the term at all).
-
-    Processes ALL of each person's archived messages (no sampling) - the
-    profile itself is the cap: only the top `words_top`/`phrases_top` most
-    distinctive entries per category are kept, so a 60k-message chatter and a
-    3k-message chatter end up the same size. Covers a broad roster (top
-    chatters by volume), not just the classifier classes."""
+    """Build capped per-author marker profiles from usable messages in the
+    configured analysis roster. Score words, pairs and emotes against a shared
+    background with log-odds and panel-rarity weighting."""
     from collections import Counter
     conn = chat_archive.connect()
     if roster is None:
@@ -520,11 +490,10 @@ def profile_for(author, channel=None, year=None, author_cap=20000):
 
 
 def most_like(author, n=6, channel=None, year=None):
-    """Chatters who share `author`'s distinctive voice - overlap of favorite
-    words (60%) and favorite word-pairs (40%). Returns
-    [(author, score, [shared markers]), ...] with pairs preferred as the shown
-    evidence since they read as topics, not tics. `channel` scopes the
-    TARGET's profile to one chat (the panel stays full-history)."""
+    """Rank roster authors by marker overlap: words (45%), word pairs (25%)
+    and emotes (30%). Return [(author, score, shared markers), ...].
+    Channel/year scope applies to the target profile; comparison profiles use
+    their stored histories."""
     model = load()
     profiles = model.get("profiles")
     if not profiles:

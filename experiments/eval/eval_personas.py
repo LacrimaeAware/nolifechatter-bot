@@ -1,18 +1,12 @@
-"""Objective persona eval: does a generated persona line read as the target?
+"""Measure classifier attribution of generated persona lines.
 
-For each author, generate N lines with the persona engine (the live RAG path
-against LM Studio), run each through the authorship classifier, and measure how
-often the line is attributed to the intended author (top-1) and the average
-probability mass the classifier puts on them. Compares against the classifier's
-attribution rate on that author's REAL held-out lines (its ceiling), so you can
-read generated-vs-real on the same scale.
-
-No fine-tuned weights required - this scores whatever `persona_llm.generate`
-currently uses (RAG today). Point it at a LoRA-backed endpoint later to compare.
+For each author, generate samples through the configured persona engine and
+report top-1 attribution plus the target score returned within the top two
+classifier results (zero when absent). Compare attribution with a random sample
+of that author's archive lines. The reference sample is not a held-out test set.
 
     python experiments/eval/eval_personas.py [--authors a,b,c] [--per-author 6]
-                                    [--channel <ch>] [--mode normal|hyper]
-"""
+        [--channel ch] [--mode normal|hyper]"""
 
 import argparse
 import asyncio
@@ -75,8 +69,7 @@ async def main():
                 samples.append(f"[{top} {p:.0%}] {line}")
         n_gen = len(gen_probs)
 
-        # classifier's ceiling on this author's REAL lines - a RANDOM sample
-        # across all their messages (not the earliest, which is unrepresentative).
+        # Classifier attribution on a random archive reference sample.
         import random
         real = [m for m in chat_archive.messages_for(author)
                 if m and len(m.split()) >= 2]
@@ -95,13 +88,13 @@ async def main():
         if n_gen:
             overall_gen.append(gen_rate)
             overall_real.append(real_rate)
-        print(f"{author:26} gen→target {gen_rate:.0%}  (avg p {avg_p:.0%})  "
-              f"| real-line ceiling {real_rate:.0%}  | mistaken for {top_conf}", flush=True)
+        print(f"{author:26} gen→target {gen_rate:.0%}  (mean top-2 target score {avg_p:.0%})  "
+              f"| real-line reference {real_rate:.0%}  | mistaken for {top_conf}", flush=True)
 
     if overall_gen:
         print()
         print(f"OVERALL  generated-as-target {sum(overall_gen)/len(overall_gen):.0%}"
-              f"   vs real-line ceiling {sum(overall_real)/len(overall_real):.0%}"
+              f"   vs real-line reference {sum(overall_real)/len(overall_real):.0%}"
               f"   ({len(overall_gen)} authors, channel #{channel}, mode {args.mode})")
     out = os.path.join("data", "unsynced", "persona_eval.json")
     os.makedirs(os.path.dirname(out), exist_ok=True)

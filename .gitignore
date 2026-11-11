@@ -78,3 +78,6 @@ data/STOP
 # The synthetic Chatterino logs used by the examples walkthrough are tracked.
 !examples/sample-logs/**/*.log
 data/unsynced/obsession_df_v2.json
+
+# Rebuilt project presentation.
+/site/

@@ -1,12 +1,10 @@
-"""Train the authorship classifier (powers ~whosaid and persona eval).
+"""Train the authorship classifier used by ~whosaid and persona evaluations.
+
+Read the archive, fit TF-IDF features and logistic regression, save to
+config.CLASSIFIER_FILE, and print held-out top-1 accuracy.
 
     python tools/build/train_classifier.py [--authors a,b,c] [--max-authors 40]
-                                       [--per-author 4000]
-
-Reads the local archive, trains a char-ngram + word Naive Bayes, saves it to
-config.CLASSIFIER_FILE (gitignored), and prints held-out top-1 accuracy so you
-can see how separable the chatters actually are. Nothing is sent anywhere.
-"""
+                                         [--per-author 4000]"""
 
 import argparse
 import json

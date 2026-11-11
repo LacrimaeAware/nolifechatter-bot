@@ -1,16 +1,8 @@
-"""Semantic person-vectors (built offline by tools/build/build_persona_embeddings.py).
+"""Mean-pooled message embeddings for per-author comparison.
 
-The lexical layer (~markers/~like) sees which exact words someone overuses;
-this layer sees what they talk ABOUT - two chatters with zero shared
-catchphrases can still be semantic twins. Vectors are mean-pooled local
-embeddings of each person's messages, stored in a gitignored pickle.
-
-Raw mean-pooled chat embeddings are anisotropic: every chatter lands ~0.99
-cosine from every other because "is twitch chat" dominates the direction. So
-similarity is computed on CENTERED vectors - subtract the roster's mean
-person-vector and renormalize, leaving only how each person deviates from the
-generic chatter. (Same cure as the lexical layer's everyone-overlaps problem.)
-"""
+Built offline by tools/build/build_persona_embeddings.py and stored in a
+gitignored pickle. Compare vectors after roster mean-centering, optional
+top-component removal and renormalization."""
 
 import os
 import pickle
@@ -24,17 +16,14 @@ _CENTERED = None
 _STAMP = None
 
 # All-but-the-top-k isotropy correction (Mu & Viswanath, ICLR 2018) applied
-# AFTER mean-centering. Centering already does the heavy lifting (mean
-# |off-diagonal cosine| 0.983 raw -> 0.165 centered); k chosen EMPIRICALLY by
-# experiments/eval/eval_geometry.py, not by theory, because the effect is non-monotonic:
+# AFTER mean-centering. Recorded mean |off-diagonal cosine|:
+# 0.983 raw -> 0.165 centered. k was compared in
+# experiments/eval/eval_geometry.py:
 #   k=0  person-cos 0.165 / axis-score-corr 0.302
-#   k=1  person-cos 0.157 / axis-score-corr 0.335  (k=1 tangles the trait axes!)
-#   k=2  person-cos 0.149 / axis-score-corr 0.249  (improves BOTH)
-# k=1 removes a direction that carried axis-discriminative signal; the 2nd
-# component is a shared nuisance whose removal helps person similarity AND trait
-# decorrelation. At k=2 every trait axis still retains >=0.94 of its energy
-# (eval_geometry guard: doomer 0.943 lowest, unhinged 0.995 highest), so the
-# dials are not blunted. Set to 0 to disable.
+#   k=1  person-cos 0.157 / axis-score-corr 0.335
+#   k=2  person-cos 0.149 / axis-score-corr 0.249
+# At k=2 the recorded axis-energy retention was >=0.94
+# (doomer 0.943 lowest, unhinged 0.995 highest). Set to 0 to disable.
 ABTT_K = 2
 
 

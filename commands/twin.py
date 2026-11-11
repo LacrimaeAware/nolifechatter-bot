@@ -2,8 +2,8 @@ from utils import chat_archive, persona_embeddings
 from utils.persona_classifier import most_like
 
 description = (
-    "A chatter's overall twin - vocabulary + emotes + meaning blended into one "
-    "verdict, with the per-channel breakdown. (~like = words/emotes only, "
+    "Similar writing, found by combining vocabulary/emote and embedding scores. "
+    "Shows both scores for the closest match. (~like = words/emotes only, "
     "~vibes = meaning only; this is both.)\n"
     "  ~twin <user>"
 )

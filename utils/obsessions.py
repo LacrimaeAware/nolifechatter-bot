@@ -1,15 +1,8 @@
-"""What a chatter will not shut up about - measured, not guessed.
+"""Find repeatedly used terms with high author-to-corpus frequency ratios.
 
-Built for ~ragebait after every "hand the model a random conversation and
-ask it to find something funny" approach failed: most chat contains nothing
-mockable, so a weak model invents a joke out of noise. An obsession is
-different - it is a fact the archive can prove (N messages across M separate
-days, X times the rest of the chat's rate), it needs no surrounding
-conversation to make sense, and it leaves the model only the phrasing.
-
-Measured over the two home chats: 25-60 usable obsessions per chatter, and
-unlike dunk/argument mining it works for quiet chatters too.
-"""
+Counts use deduplicated messages in the configured home channels. Candidates
+must pass message-count, distinct-day, distinct-author and rate-ratio thresholds.
+The corpus baseline includes the target author."""
 
 import json
 import logging
@@ -23,7 +16,7 @@ from utils import chat_archive
 CACHE_FILE = os.path.join("data", "unsynced", "obsession_df_v2.json")
 MIN_MESSAGES = 12       # times they've brought it up
 MIN_DAYS = 8            # ...across this many separate days (not one binge)
-MIN_RATIO = 5.0         # ...at this multiple of everyone else's rate
+MIN_RATIO = 5.0         # ...at this multiple of the corpus-average rate
 MIN_OTHERS = 6          # ...and this many DISTINCT people must use it too
 EXAMPLES = 5
 
@@ -61,16 +54,10 @@ def _home():
 
 
 def _corpus_df(force=False):
-    """{term: [messages, distinct_people]} across the home chats, cached.
+    """Return ({term: [message_count, distinct_authors]}, total_messages).
 
-    Two baselines, both needed. `messages` says how common the word is, so a
-    person's rate can be compared against it. `distinct_people` is what
-    separates a SUBJECT from a personal typo: several people talk about osrs,
-    but only one person types 'tihnk'. Both are computed on DEDUPED rows
-    the archive stores most messages 2-3 times (chatterino/zonian/live logs
-    overlap), which otherwise inflates every count and makes a typo look
-    like other people were using it too.
-    """
+    Counts span configured home channels and deduplicate normalized text per author.
+    The disk cache is reused unless force is set."""
     if not force and os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, encoding="utf-8") as fh:
@@ -167,11 +154,7 @@ def for_user(canon, limit=12, force=False):
     for term, n in counts.most_common(600):
         if n < MIN_MESSAGES or len(days[term]) < MIN_DAYS:
             continue
-        # A SUBJECT is something several people talk about - just less often
-        # than this person. A personal typo or speech tic ('tihnk', 'wuld',
-        # 'aswell') scores an identical rate-ratio but essentially nobody
-        # else types it. That is what separates "won't shut up about osrs"
-        # from "spells think wrong", and the latter is not a joke.
+        # Require the term to occur across at least MIN_OTHERS authors.
         df_count, df_people = df.get(term, [0, 0])
         if df_people < MIN_OTHERS:
             continue

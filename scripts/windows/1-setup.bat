@@ -1,13 +1,13 @@
 @echo off
 REM ============================================================
 REM  NoLifeChatter - one-time setup (run from scripts\windows; it
-REM  changes to the project root itself). Double-click this once. It installs everything and builds
-REM  the database. Re-running it is safe.
+REM  changes to the project root itself). Creates the environment, installs
+REM  dependencies and initializes the database.
 REM ============================================================
 cd /d "%~dp0..\.."
 
 echo.
-echo [1/3] Creating a private Python environment (.venv)...
+echo [1/3] Creating a Python virtual environment (.venv)...
 python -m venv .venv
 if errorlevel 1 (
   echo.

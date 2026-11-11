@@ -112,8 +112,8 @@ mimic_enabled = true
 # line of a random recent chatter (0 = off; 0.002 is about 1 in 500). A
 # cooldown (seconds) keeps it from bunching up during a busy stretch.
 reaction_chance = 0.0
-# Higher chance when a message appears directed at a recent chatter persona
-# (@name or bare name like "gero"). Still subject to reaction_cooldown.
+# Higher chance when a message names a recent chatter persona.
+# Still subject to reaction_cooldown.
 reaction_directed_chance = 0.0
 reaction_cooldown = 90
 # Chance that an autonomous reaction sends one extra short follow-up line,
@@ -129,8 +129,7 @@ command_continue_delay = 1.5
 # Random reactions use the LLM persona engine. Markov stays explicit-command
 # only via ~mimic/~markov.
 reaction_use_llm = true
-# Anything the bot is about to post is checked against this denylist first, so
-# recombined real chat can't get the bot banned for posting slurs/hate terms.
+# Check outgoing persona text against this denylist before posting.
 # Keep the actual list in a gitignored file (one term per line, '#' comments);
 # if the file is missing, nothing is filtered.
 blocklist_file = "data/unsynced/blocklist.txt"
@@ -142,7 +141,7 @@ log_file = "data/unsynced/persona_logs.jsonl"
 
 [llm]
 # Persona engine backend - any OpenAI-compatible chat endpoint. LM Studio's
-# local server by default (free, local, private). Load a model + start the
+# local server by default. Load a model + start the
 # server, or point this at llama.cpp / Ollama / a hosted API.
 # false disables every live chat/embedding call at startup. Super admins can
 # also switch model work at runtime with ~model off/on.
@@ -163,8 +162,8 @@ retry_context_messages = 12
 # their vocabulary. Each snippet costs ~5 lines of the relevant budget.
 snippet_hits = 8
 # How many samples to draw per reply; the best valid candidate is posted
-# (copies, URLs, and echoes of other chatters' lines are rejected). The big
-# prompt is processed once and cached, so 2 is cheap. 1 = single draw.
+# (copies, URLs, and echoes of other chatters' lines are rejected).
+# 1 = single draw.
 candidates = 2
 # Optional meaning-based persona retrieval. Requires [llm].embed_model plus a
 # built per-message index. These floors keep loose semantic neighbors from
@@ -180,7 +179,7 @@ semantic_unanchored_min_score = 0.62
 channels = []
 
 [analysis]
-# The shared community cohort for classifier, semantic vectors, IQ, facts, and
+# The shared community cohort for classifier, semantic vectors, facts, and
 # verified profiles. Membership is based on activity inside these channels;
 # once selected, a person's complete archive can still supply evidence.
 # Empty falls back to [comedy].channels, then [bot].channels.

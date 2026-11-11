@@ -6,11 +6,9 @@ Default pipeline:
 2. Rebuild lexical voice profiles in the classifier pickle.
 3. Rebuild the shared per-utterance semantic index used by RAG and analysis.
 4. Pool semantic person vectors from that index without re-embedding the corpus.
-5. Rebuild the current `~iq` text-IQ ensemble cache (tools/research; skipped
-   when that script is absent).
-6. Rebuild the deep-history regex claim receipt bank.
-7. Optionally rebuild verified profile v5 for an active roster.
-8. Smoke-check trait axes/leaderboards.
+5. Rebuild the deep-history regex claim receipt bank.
+6. Optionally rebuild verified profile v5 for an active roster.
+7. Smoke-check trait axes/leaderboards.
 
 Use --dry-run to print the commands without running them. Use --skip-embeddings
 when LM Studio's embedding endpoint is not running; that also skips the message
@@ -33,8 +31,7 @@ def run_step(name: str, cmd: list[str], dry_run: bool = False) -> int:
     print(" ".join(cmd), flush=True)
     script = ROOT / cmd[1] if len(cmd) > 1 else None
     if script is not None and not script.exists():
-        # Some builds (the text-IQ cache) live under tools/research and are
-        # not part of every checkout; the rest of the pipeline still applies.
+        # An unavailable optional step does not prevent the remaining rebuilds.
         print(f"== {name} skipped: {cmd[1]} is not in this checkout ==", flush=True)
         return 0
     if dry_run:
@@ -84,13 +81,6 @@ def main() -> int:
     parser.add_argument("--message-index-per-author", type=int, default=3000)
     parser.add_argument("--no-message-index-force", action="store_true",
                         help="leave existing per-author message index files in place")
-
-    parser.add_argument("--skip-iq", action="store_true")
-    parser.add_argument("--iq-max-utterances", type=int, default=3000)
-    parser.add_argument("--iq-min-utterances", type=int, default=80)
-    parser.add_argument("--iq-author-cap", type=int, default=15000)
-    parser.add_argument("--iq-judge", action="store_true",
-                        help="also run the optional local-LLM judge layer")
 
     parser.add_argument("--skip-fact-bank", action="store_true")
     parser.add_argument("--fact-max-authors", type=int, default=40)
@@ -145,18 +135,6 @@ def main() -> int:
             cmd.append("--report")
         steps.append(("semantic person vectors", cmd))
 
-    if not args.skip_iq:
-        cmd = [py, "tools/research/build_iq_v2.py",
-               "--force",
-               "--max-utterances", str(args.iq_max_utterances),
-               "--min-utterances", str(args.iq_min_utterances),
-               "--author-cap", str(args.iq_author_cap)]
-        if args.skip_embeddings:
-            cmd.append("--no-embeddings")
-        if args.iq_judge:
-            cmd.append("--judge")
-        steps.append(("text-IQ", cmd))
-
     if not args.skip_fact_bank:
         steps.append(("claim receipt bank", [
             py, "tools/build/build_fact_bank.py",
@@ -165,7 +143,7 @@ def main() -> int:
         ]))
 
     if args.profile_roster:
-        steps.append(("verified profile v5", [
+        steps.append(("user-claim profiles", [
             py, "tools/build/build_user_profiles.py",
             "--roster", str(args.profile_roster),
             "--cap", str(args.profile_cap),

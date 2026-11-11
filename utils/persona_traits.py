@@ -133,20 +133,14 @@ def axes_ready() -> bool:
 
 
 def ortho_axis_vectors():
-    """The SCORING directions: the five built-in axes symmetrically
-    orthogonalized (Löwdin, A_orth = (A Aᵀ)^{-1/2} A) so that a person's five
-    trait z-scores stop double-counting a shared component.
+    """Symmetrically orthogonalize the five built-in scoring directions
+    with the Lowdin transform, A_orth = (A Aᵀ)^{-1/2} A.
 
-    Why this and not Gram-Schmidt: the raw poles are correlated (menace·doomer
-    ≈ 0.64 on bge-m3), so projecting onto raw directions makes the per-person
-    scores correlate ~0.48 across the roster: 'all the axes feel the same'.
-    Gram-Schmidt removes that too, but it is ORDER-DEPENDENT: whichever axis is
-    last keeps only its residual (doomer stayed just 0.73 aligned with its own
-    name). Löwdin is the orthogonal matrix closest to the raw set, so it shares
-    the distortion evenly - every axis stays 0.92+ aligned with its label and
-    no axis is privileged. Measured: score-correlation 0.483 raw → 0.302 here.
-    See experiments/eval/eval_geometry.py for the numbers and docs/RESEARCH_TO_APPLIED.md
-    for the structured-transform-discovery lineage."""
+    Recorded bge-m3 comparison: menace·doomer ≈ 0.64 for the raw axes;
+    roster score correlation was ~0.48. Sequential Gram-Schmidt left doomer
+    0.73 aligned with its raw direction. Lowdin retained alignment 0.92+ for
+    every raw direction; score correlation was 0.483 raw → 0.302.
+    See experiments/eval/eval_geometry.py and docs/RESEARCH_TO_APPLIED.md."""
     global _ORTHO_VECS
     if _ORTHO_VECS is None:
         import numpy as np

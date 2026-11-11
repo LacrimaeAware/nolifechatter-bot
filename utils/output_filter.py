@@ -1,16 +1,7 @@
-"""Output guard: block the bot from POSTING bannable content.
+"""Check generated output against a configured denylist.
 
-Whatever the bot sends to Twitch is on the bot account, regardless of how the
-text was produced (Markov, an LLM, anything). Generated personas recombine real
-chat, which can contain slurs/hate terms that get a bot banned. This module
-checks generated text against a denylist before it's ever sent.
-
-The denylist itself is NOT in this repo - it's loaded from a gitignored file
-(config.BLOCKLIST_FILE, default data/unsynced/blocklist.txt: one term per line,
-'#' comments). So the public showcase contains the mechanism, not a slur
-catalog. With no file present, is_clean() returns True for everything (the
-filter is opt-in via the blocklist).
-"""
+Read config.BLOCKLIST_FILE, one term per line with # comments.
+With no file present, is_clean() returns True."""
 
 import logging
 import re
@@ -21,8 +12,7 @@ _terms = None
 
 
 def _collapse(s: str) -> str:
-    """Lowercase and drop everything but [a-z0-9] so spacing/punctuation/leet
-    evasion ('n i g g a', 'f@g') collapses to the bare term for matching."""
+    """Lowercase and remove characters outside [a-z0-9] before substring matching."""
     return re.sub(r"[^a-z0-9]", "", s.lower())
 
 
@@ -55,7 +45,5 @@ def is_clean(text: str) -> bool:
 
 
 def active() -> bool:
-    """Whether a non-empty denylist is loaded. Posting features that recombine
-    real chat should refuse to send when this is False (fail closed) - Twitch
-    bans the bot *and* the operator for posted slurs, with no safe channel."""
+    """Whether a non-empty denylist is loaded."""
     return len(_load()) > 0

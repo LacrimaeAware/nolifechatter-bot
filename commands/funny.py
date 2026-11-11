@@ -4,9 +4,10 @@ from utils import chat_archive
 from utils import comedic_influence as ci
 
 description = (
-    "~funny <user> | ~funny top|bottom [n] - comedy ranking: how much more "
-    "others laugh after you talk than before (so stream reactions cancel out). "
-    "100 = average, higher = you make people laugh. chat= overrides the chats."
+    "~funny <user> | ~funny top|bottom [n] - archive laughter index: other "
+    "chatters with laughter markers after a message who were not laughing "
+    "before it. Repeat responses by one chatter are downweighted. "
+    "100 = baseline average. chat= overrides the chats."
 )
 
 
@@ -39,7 +40,7 @@ async def handle_funny(bot, message, params):
         if not rows:
             await message.channel.send("Not enough data to rank comedy yet.")
             return
-        label = "least funny" if sub == "bottom" else "funniest"
+        label = "lowest comedy index" if sub == "bottom" else "highest comedy index"
         parts = [f"{i}. {chat_archive.display_name(a)} ({d['index']})"
                  for i, (a, d) in enumerate(rows, 1)]
         await message.channel.send(f"😂 {label} [{'+'.join(chans)}]: " + " · ".join(parts))
@@ -50,13 +51,13 @@ async def handle_funny(bot, message, params):
     if not d:
         await message.channel.send(
             f"Not enough data to score {user} in {'/'.join(chans)} "
-            f"(needs {ci.MIN_SETUPS}+ lines with others around, and several "
-            f"different people laughing - not just one clique)."
+            f"(needs {ci.MIN_REGULAR}+ eligible message groups and laughter "
+            f"from several different chatters)."
         )
         return
     best = d.get("best_text") or ""
-    tail = f" · best landed line: \"{best[:140]}\"" if best else ""
+    tail = f" · most new laughers after: \"{best[:140]}\"" if best else ""
     await message.channel.send(
-        f"😂 {user}: comedy index {d['index']} · made {d['breadth']} different "
-        f"people laugh · judged on {d['setups']} lines{tail}"
+        f"😂 {user}: comedy index {d['index']} · laughter markers from {d['breadth']} "
+        f"different chatters · based on {d['setups']} message groups{tail}"
     )

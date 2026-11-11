@@ -1,6 +1,6 @@
 """Run a repo-level freshness check without mutating local state.
 
-This is meant as the "before bed / after break" command:
+Usage:
 
     python tools/check/freshness_check.py
 
@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if not (ROOT / "config.toml").exists():
     os.environ.setdefault("NLC_CONFIG", str(ROOT / "config.example.toml"))
 
-# Reference docs every checkout carries (the public edition included).
+# Required reference documentation.
 PUBLIC_DOCS = {
     "docs/ARCHITECTURE.md",
     "docs/SETUP.md",
@@ -38,8 +38,7 @@ PUBLIC_DOCS = {
     "docs/RESEARCH_QUESTIONS.md",
 }
 
-# Operator working notes. The private checkout has all of them; the public
-# edition has none, so they are required only when at least one is present.
+# Optional working notes; require the set only when at least one is present.
 WORKING_DOCS = {
     "docs/GROUND_TRUTH.md",
     "docs/README.md",
@@ -96,12 +95,11 @@ LEGACY_LINK_TEXT = (
 )
 
 MAINTENANCE_SCRIPT_RE = (
-    r"(?:rebuild_persona_artifacts|build_iq_v2|build_user_profiles|"
+    r"(?:rebuild_persona_artifacts|build_user_profiles|"
     r"build_emote_semantics)\.py"
 )
 MAINTENANCE_LOG_GLOBS = (
     "rebuild_persona_artifacts*.log",
-    "iq-v5-*.out.log",
     "user-profiles-*.out.log",
     "emote-semantics-*.out.log",
 )
@@ -303,7 +301,6 @@ def rebuild_log_step() -> Step:
         details.append("maintenance failure detected despite any success-looking tail")
     completed = (
         "exit_code=0" in (tail or "")
-        or "text-IQ rows ->" in (tail or "")
         or "emote context-vectors ->" in (tail or "")
     ) and not failed
     status = "OK" if (pids and not failed) or completed else "WARN"

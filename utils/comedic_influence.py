@@ -1,41 +1,14 @@
-"""Comedy Influence - does a chatter make OTHER people laugh, broadly?
+"""Archive laughter index from messages around each eligible setup.
 
-The defining metric (re-checkable, three ideas stacked):
+A setup is the final eligible message in a same-author burst. For each setup,
+count other chatters with laughter markers in the following WINDOW_SECS who
+were not laughing in the preceding WINDOW_SECS. Bots, commands and laughter-only
+messages are excluded; a setup requires another chatter present afterward.
 
-1. SPARK, not coincidence. For each "setup" message m by author A, look at the
-   distinct OTHER users who laugh in the 30s AFTER m but were NOT already laughing
-   in the 30s BEFORE m. Those are the people A *sparked* (started laughing). The
-   "minus before" is the stream-confound fix: a chat reacting to the STREAM is
-   already laughing before m too, so it cancels - A is only credited for laughter
-   that begins when they speak, not for posting during a chat-wide KEKW wave.
-
-2. BROAD beats CLIQUE. Count how many times each person B sparked-laughed at A
-   across all of A's setups: spark[A][B]. A's score sums √(spark[A][B]) over B
-   so B's 1st laugh ≈ 1 but B's 100th adds almost nothing. One buddy who laughs at
-   everything you say can't run up your score; many DIFFERENT people each laughing
-   a little does. The "effective number of laughers" N_eff = (Σ√spark)² / Σspark
-   is ~1-2 for a clique and ≈ breadth for broad appeal - used to gate cliques out.
-
-3. REGULARS ONLY. influence(A) = Σ√spark / setups (clique-robust spark rate) →
-   an IQ-style index (100 + 15·z over the roster) with shrinkage toward 100. Only
-   real regulars are ranked (MIN_REGULAR combined setups): in a chat with ~1M
-   lines, someone with a few dozen is a visitor, not a regular, and their rate is
-   noise. This is a PER-LINE rate ("when you talk, do people laugh?"), so the
-   highest-volume chatters who mostly say mundane things rank low, not high - that
-   is the point (reach/total-reactions just measures who talks most).
-
-Baked-in constraints (all requested): self-laughs never count; a setup needs
-another user actually present to react; a message that is itself just a laugh is
-not a setup; bots / command lines are excluded as setups and reactions. Utility
-bots are dropped two ways - the manual block list (config.EXCLUDE_USERS) AND a
-heuristic: an account whose lines are mostly templated bot output (_BOT_OUTPUT)
-is skipped automatically. Each chat has its own baseline; a user's overall score
-is the setup-weighted combine across the configured conversational chats
-(config.COMEDY_CHANNELS).
-
-A fun mirror over the archive, not a measure of who is objectively funny
-"funny" is subjective and this only captures one slice: who reliably gets a laugh
-out of OTHER people when they talk.
+For each author, sum the square roots of these per-chatter counts and divide
+by the setup count. Standardize against each channel's baseline, combine the
+channel scores weighted by setup count, and shrink the index toward 100.
+MIN_REGULAR and MIN_EFF_LAUGHERS set the minimum counts for ranking.
 """
 
 import re
@@ -55,7 +28,7 @@ FWD_MSG_CAP = 80        # safety bound on the forward scan inside a burst
 AFTER_CAP = 8           # max distinct laughers collected per window (cost bound)
 CACHE_TTL_SECS = 300    # also invalidated immediately by a newer live message
 MIN_SETUPS = 200        # per-chat floor to enter a chat's baseline pool
-MIN_REGULAR = 1000      # combined setups to be RANKED - a real regular, not a visitor
+MIN_REGULAR = 1000      # combined setups required for ranking
 MIN_EFF_LAUGHERS = 3.0  # effective (clique-robust) distinct laughers to be ranked
 SHRINK_K = 250          # confidence shrinkage: pull thin samples toward 100
 BOT_OUTPUT_RATIO = 0.55 # exclude an account if >= this share of its lines are bot output
@@ -108,7 +81,7 @@ def _stats_from_spark(sp, setups):
     return {
         "influence": eff / setups if setups else 0.0,
         "setups": setups,
-        "breadth": len(sp),               # distinct people sparked
+        "breadth": len(sp),               # distinct chatters with new laughter markers
         "neff": (eff * eff / raw) if raw else 0.0,  # effective # of laughers
     }
 
@@ -210,7 +183,7 @@ def compute_channel(channel):
 
             if others_present:
                 before = {a for (_t, a) in dq if a != ai}
-                net = after - before          # people A actually sparked
+                net = after - before          # chatters with new laughter markers after this setup
                 setups[ai] += 1
                 sp = spark[ai]
                 for b in net:
@@ -253,8 +226,7 @@ def _z(stats, res):
 
 
 def _index(zc, total_setups):
-    """IQ-style index with confidence shrinkage: a thin sample is pulled toward
-    100 (the roster average) so a few lucky windows can't crown someone."""
+    """Map a z-score to 100 + 15*z, shrinking toward 100 by setup count."""
     shrunk = zc * total_setups / (total_setups + SHRINK_K)
     return round(100 + 15 * shrunk)
 
@@ -296,20 +268,18 @@ def _combine(canon, channels):
 
 
 def _rankable(agg):
-    """A real regular with broad enough appeal to be scored."""
+    """Whether counts meet the setup and effective-laugher ranking thresholds."""
     return bool(agg) and agg["setups"] >= MIN_REGULAR and agg["neff"] >= MIN_EFF_LAUGHERS
 
 
 def user_score(user, channels=DEFAULT_CHANNELS):
-    """A user's comedy index across `channels`, or None unless they're a real
-    regular (MIN_REGULAR combined setups) with clique-robust breadth."""
+    """A user's combined archive laughter index, or None below ranking thresholds."""
     agg = _combine(chat_archive.normalize_author(user), channels)
     return agg if _rankable(agg) else None
 
 
 def leaderboard(channels=DEFAULT_CHANNELS, n=5, bottom=False):
-    """Ranked comedic influence across `channels`, restricted to real regulars
-    (MIN_REGULAR combined setups, MIN_EFF_LAUGHERS effective distinct laughers)."""
+    """Rank combined archive laughter indices for authors meeting count thresholds."""
     authors = set()
     for ch in channels:
         res = compute_channel(ch)

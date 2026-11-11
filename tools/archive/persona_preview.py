@@ -2,9 +2,8 @@
 
     python tools/archive/persona_preview.py <user> [n] [--order 2]
 
-Generates n fake messages from the user's archived history so you can see how
-recognizable the persona is before any LLM money or chat-posting is involved.
-This script ONLY prints - it never connects to Twitch.
+Prints n Markov messages generated from the user's archived history.
+Nothing is posted to Twitch.
 """
 
 import argparse
@@ -27,7 +26,7 @@ def main():
     ap.add_argument("user")
     ap.add_argument("n", nargs="?", type=int, default=8)
     ap.add_argument("--order", type=int, default=2,
-                    help="context words (2 = looser/funnier, 3 = closer to real)")
+                    help="context words per Markov state (default: 2)")
     ap.add_argument("--seed", type=int, default=None)
     args = ap.parse_args()
 

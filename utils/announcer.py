@@ -1,15 +1,10 @@
-"""Occasional per-channel promo/reminder posts with jittered timing.
+"""Occasional per-channel reminder posts with randomized timing.
 
-Cadence contract: at most ANNOUNCE_MAX_PER_DAY posts per rolling 24h per
-channel, never sooner than ANNOUNCE_MIN_GAP_HOURS after that channel's last
-post - and past that eligibility the actual moment is random (a per-check
-probability that ramps the longer it's been) and prefers an ACTIVE chat, so
-the schedule breathes instead of metronoming every 12 hours and the link
-lands when people are actually around to see it.
+Automatic posts follow ANNOUNCE_MAX_PER_DAY and ANNOUNCE_MIN_GAP_HOURS.
+After eligibility, a per-check probability increases with time since the last
+post. Recent-message activity can delay posting until the starvation threshold.
 
-State (last post times per channel) persists in data/unsynced so the
-keep-alive loop's restarts don't reset the clock.
-"""
+Per-channel post times persist in data/unsynced across restarts."""
 
 import asyncio
 import json
@@ -64,11 +59,9 @@ def hours_since_last(state: dict, channel: str, now: float = None) -> float:
 
 
 def post_chance(hours: float) -> float:
-    """Per-check (5 min) post probability once past the minimum gap.
+    """Per-check (5 min) post probability after the minimum gap.
 
-    Ramps 2% -> 10% between min_gap and 2*min_gap, so the post lands a
-    randomized few hours after eligibility: typically ~2/day when chat is
-    around, sometimes 1 - never a fixed every-12-hours metronome."""
+    Ramps from 2% to 10% between min_gap and 2*min_gap."""
     gap = max(0.1, config.ANNOUNCE_MIN_GAP_HOURS)
     if hours < gap:
         return 0.0
@@ -135,7 +128,7 @@ def status_lines() -> list:
 
 
 async def post_now(bot, channel_name: str) -> str:
-    """Immediate post (admin/test path). Records the post so cadence holds."""
+    """Send an immediate admin/test post and record its timestamp."""
     text = message_text()
     if not text:
         return "announcer has no message/url configured"

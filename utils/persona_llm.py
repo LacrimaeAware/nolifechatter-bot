@@ -1,16 +1,8 @@
-"""LLM persona engine: speak as a real chatter, using their own messages.
+"""Persona generation from sampled messages, retrieved examples and chat context.
 
-Many-shot voice cloning (no training): the prompt blends a random signature
-sample from the person's full history with messages retrieved from that same
-author for the current chat topic. The model sees those examples plus the live
-conversation, then writes their next line. Because the exemplars keep their
-natural length distribution, output isn't forced terse - it lands where they
-actually land. Two modes: 'normal' (natural, conversational) and 'hyper' (their
-traits cranked up for comedy).
-
-Runs against any OpenAI-compatible endpoint (services/llm.py) - LM Studio's
-local server by default, so edgy content stays on the machine.
-"""
+The prompt includes a cached signature sample, topic-relevant messages and
+neighboring archive lines. Normal and hyper modes use different persona
+instructions. Requests go to the configured OpenAI-compatible endpoint."""
 
 import json
 import logging
@@ -28,13 +20,10 @@ from utils.log_rotation import rotate_file
 
 
 def log_event(event: dict) -> None:
-    """Append one persona event to the private JSONL log (never raises).
+    """Append a generation event to JSONL when logging is enabled; catch write errors.
 
-    Every ~persona/~hyper/reaction generation gets recorded - the evidence
-    that was fed, every candidate with its rejection reason, and the final
-    line - so quality problems can be diagnosed from real usage instead of
-    hand-built smoke cases. The file lives in gitignored data/unsynced/.
-    """
+    Events can include selected evidence, candidate rejection reasons and the final
+    line. The default path is data/unsynced/."""
     if not getattr(config, "PERSONA_LOG", True):
         return
     try:
@@ -136,14 +125,7 @@ def _term_overlap_count(query_terms, evidence_terms) -> int:
 
 
 def _term_rarity_weight(term: str) -> float:
-    """Weight a query term by how distinctive it is in the archive.
-
-    Flat weights let generic terms flood retrieval - measured live 2026-07-19:
-    for 'who is the user referenced as \"<nick>\"' the terms user/referenced/
-    <nick> weighed equally, evidence matching 'user' crowded out every line
-    about the asked-about nick (0/50 selected), and the persona had nothing to
-    answer from. A near-unique term (a username, a niche word) IS the subject
-    of the question; a word half the archive contains carries almost no signal."""
+    """Weight query terms more heavily when they occur less often in the archive."""
     count = chat_archive.term_count(term)
     if count is None:
         return 2.0          # FTS unavailable - legacy flat weight
@@ -214,14 +196,10 @@ def _semantic_text_allowed(text: str, score: float, terms) -> bool:
 
 
 def exemplars(author: str, n: int = None, channel: str = None):
-    """~n messages from the author across their whole history.
+    """Sample author messages, optionally scoped to a channel.
 
-    Mostly a STABLE seeded sample (same core every restart) plus a small fresh
-    random tail. The old fully-random sample re-rolled the persona's entire
-    style evidence on every cache rebuild - one lucky/unlucky draw could make
-    the same persona brilliant one day and mush the next. A stable core keeps
-    the voice consistent; the tail keeps it from fossilizing.
-    """
+    An 80% seeded core and random tail are cached by author, count and channel
+    for the process lifetime."""
     n = n or config.LLM_EXEMPLARS
     author_key = chat_archive.normalize_author(author)
     channel_key = chat_archive.normalize_channel(channel) if channel else None
@@ -312,13 +290,10 @@ def relevant_exemplars(author: str, query_text: str, n: int = None,
 
 def evidence_snippets(author: str, query_text: str, hits_n: int = None,
                       exclude_terms=None):
-    """Top retrieval hits expanded into small chat moments (±2 lines).
+    """Expand top retrieval hits with up to two neighboring lines on each side.
 
-    An isolated matching line teaches vocabulary; the moment around it teaches
-    *behavior* - what this person says in response to what. Returns
-    (snippet_texts, used_contents) where used_contents are the hit lines, so
-    the flat lists can avoid duplicating them.
-    """
+    Return (snippet_texts, used_contents), allowing flat lists to omit hit lines
+    already represented in the snippets."""
     hits_n = hits_n if hits_n is not None else getattr(config, "LLM_SNIPPET_HITS", 8)
     if hits_n <= 0 or not (query_text or "").strip():
         return [], set()
@@ -802,12 +777,7 @@ def _voice_score(author: str, text: str) -> tuple[float, dict]:
 
 def _candidate_score(author: str, text: str, engage_terms, examples,
                      mode: str = "normal") -> tuple[float, dict]:
-    """Score a valid candidate without another model call.
-
-    The live model already produced plausible lines. Reranking should choose the
-    one that most resembles the target and fits the directed message, while
-    keeping ordinary one-emote Twitch replies viable.
-    """
+    """Combine voice, query-term and text-pattern scores without another model call."""
     words = (text or "").split()
     n_words = len(words)
     voice, voice_details = _voice_score(author, text)
@@ -903,7 +873,7 @@ def _direct_candidate_choice(valid_candidates, directness_scores) -> tuple[int, 
 
 async def _judge_candidate_directness(user_message: str, ctx_rows,
                                       valid_candidates, model=None):
-    """Score response relevance independently to avoid pairwise position bias."""
+    """Ask for a separate relevance score for each candidate."""
     if len(valid_candidates) < 2 or len(valid_candidates) > len(_DIRECTNESS_LABELS):
         return None, ""
     labels = _DIRECTNESS_LABELS[:len(valid_candidates)]
@@ -942,9 +912,7 @@ async def _judge_candidate_directness(user_message: str, ctx_rows,
     )
     scores = _parse_directness_scores(raw or "", len(valid_candidates))
     if scores:
-        # deterministic guard: an s/old/new correction-idiom line is never a
-        # direct answer, whatever the 8B judge says - it rubber-stamped one
-        # 3/3 live (2026-07-19) because the line contained the asked-about name
+        # Cap the directness score of s/old/new correction-idiom candidates.
         for index, (text, _score) in enumerate(valid_candidates):
             if re.match(r"\s*s\s*/", text or ""):
                 scores[index] = min(scores[index], 1)
@@ -1005,10 +973,7 @@ async def generate(author: str, channel: str, user_message: str = None,
         return None
 
     exemplar_sections = []
-    # Confirmed profile facts (profile v5) - verified, multi-day-corroborated
-    # facts the person has stated about themselves, so the persona can KNOW
-    # things (job, country, hobbies) instead of only sounding right. Confirmed
-    # only: a persona prompt must not launder single-sighting guesses.
+    # Include recorded profile claims with confirmed status.
     try:
         from utils import user_profiles
         facts_line = user_profiles.profile_line(author)
@@ -1016,12 +981,12 @@ async def generate(author: str, channel: str, user_message: str = None,
         facts_line = ""
     if facts_line:
         exemplar_sections.append(
-            f"Verified facts {author} has stated about themselves "
+            f"Recorded profile claims for {author} "
             f"(use naturally when relevant; never recite as a list):\n{facts_line}"
         )
     if signature:
         exemplar_sections.append(
-            f"Random real messages from {author} across their whole history:\n"
+            f"Sample messages by {author}:\n"
             + "\n".join(signature)
         )
     if relevant:
@@ -1053,8 +1018,8 @@ async def generate(author: str, channel: str, user_message: str = None,
         f"echo the other chatters' lines. "
         f"Use the examples as style evidence, but do not copy any example verbatim; "
         f"write a new line in their voice unless the user explicitly asked for a quote. "
-        f"All examples below are from {author} only; use the relevant examples "
-        f"to understand what they tend to say in this situation.\n\n"
+        f"The examples include {author}'s messages and surrounding chat context; "
+        f"use their own messages to understand what they tend to say in this situation.\n\n"
         + "\n\n".join(exemplar_sections)
     )
     user = f"Current chat in #{channel}:\n{ctx}\n\n"
@@ -1071,9 +1036,7 @@ async def generate(author: str, channel: str, user_message: str = None,
                 {"role": "user", "content": user}]
     temperature = 1.0 if mode == "hyper" else 0.85
 
-    # Candidate selection: sample a couple of times (cheap locally - the big
-    # prompt is processed once and cached by the server) and keep the best
-    # valid line instead of shipping whatever the single draw produced.
+    # Generate the configured number of candidates and rank valid lines.
     n_candidates = max(1, candidates or getattr(config, "LLM_CANDIDATES", 1))
     engage_terms = chat_archive.query_terms(
         retrieval_text, exclude_terms=ctx_names,
@@ -1126,10 +1089,7 @@ async def generate(author: str, channel: str, user_message: str = None,
             best, best_score = out, score
 
     if prioritize_direct_response and user_message and len(valid_candidates) >= 2:
-        # judge always runs on the default (base) model, never ab_model: it is
-        # a grading task, not a persona task - with model=lora the structured-
-        # output-broken LoRA would grade its own candidates into noise, and the
-        # model swap costs an LM Studio load/unload per judged command
+        # Judge using the configured default model rather than the generation override.
         directness_scores, judge_raw = await _judge_candidate_directness(
             user_message, ctx_rows, valid_candidates
         )
@@ -1154,9 +1114,8 @@ async def generate(author: str, channel: str, user_message: str = None,
             judge_event["selected"] = chosen_index + 1
             judge_event["used"] = True
         elif re.match(r"\s*s\s*/", best or ""):
-            # no candidate earned a direct pick, and the voice-blend winner is
-            # an s/old/new correction-idiom line - never a real answer to a
-            # directed question. Ship the best non-sed candidate instead.
+            # Without a direct pick, prefer a non-correction candidate over an
+            # s/old/new voice-blend winner when one is available.
             non_sed = [c for c in valid_candidates
                        if not re.match(r"\s*s\s*/", c[0] or "")]
             if non_sed:
@@ -1197,12 +1156,7 @@ async def generate_with_retry(author: str, channel: str, user_message: str = Non
                               invoked_by: str = None,
                               model_override: str = None,
                               prioritize_direct_response: bool = False) -> str | None:
-    """Generate once with the full prompt, then retry compactly on failure.
-
-    Local LM Studio can time out on heavy prompts, especially when two commands
-    land close together. The compact retry keeps commands responsive without
-    disabling the richer default prompt for normal cases.
-    """
+    """Generate with the full prompt, then retry with a smaller prompt on failure."""
     _set_rejection(None)
     try:
         out = await generate(
@@ -1211,7 +1165,7 @@ async def generate_with_retry(author: str, channel: str, user_message: str = Non
             prioritize_direct_response=prioritize_direct_response,
         )
     except _CopiedPersonaOutput:
-        _set_rejection("model copied an archived line and the cheap repair failed")
+        _set_rejection("model copied an archived line and the repair retry failed")
         return None
     if out:
         return out

@@ -488,7 +488,7 @@ def format_sentence(report: dict[str, Any], *, max_chars: int = 470) -> str:
     words = _meaning_words(report)
     similar = _similar_clause(report)
     if words:
-        sentence = f"{name} is used to mean " + " / ".join(words)
+        sentence = f"{name} has associated tags " + " / ".join(words)
         if similar:
             sentence += f". {similar}"
     elif report.get("neighbors"):

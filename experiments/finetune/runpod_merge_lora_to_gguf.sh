@@ -5,9 +5,8 @@ set -euo pipefail
 # *usable* - LM Studio loads GGUF models, not raw PEFT adapters.
 #
 # Run on a RunPod pod (ideally the one that trained it - the base is cached).
-# Output: persona_merged_Q4_K_M.gguf  → download it, drop it in LM Studio's
-# models folder, load it, and the bot's [llm] endpoint now speaks through the
-# fine-tune. Then ~persona / the eval (experiments/eval/eval_personas.py) use it for free.
+# Output: persona_merged_Q4_K_M.gguf by default. Download and load it in
+# LM Studio, then select its model id in the bot configuration or command.
 #
 # Override via env: ADAPTER=... BASE=... OUT=...
 
@@ -78,7 +77,7 @@ pip install -q -r llama.cpp/requirements.txt
 python llama.cpp/convert_hf_to_gguf.py "$OUT" \
   --outfile persona_merged_f16.gguf --outtype f16
 
-echo "[3/3] Quantizing to $QUANT (fits 8 GB VRAM for LM Studio)..."
+echo "[3/3] Quantizing to $QUANT..."
 command -v cmake >/dev/null || { apt-get update -y >/dev/null && apt-get install -y cmake build-essential >/dev/null; }
 cmake -S llama.cpp -B llama.cpp/build -DGGML_CUDA=OFF >/dev/null
 cmake --build llama.cpp/build --target llama-quantize -j >/dev/null
@@ -87,5 +86,5 @@ cmake --build llama.cpp/build --target llama-quantize -j >/dev/null
 
 echo
 echo "DONE -> $(pwd)/persona_merged_${QUANT}.gguf"
-echo "Download it, put it in LM Studio's models folder, load it, and the bot"
-echo "is now running the fine-tuned weights (RAG prompt unchanged). Stop the pod."
+echo "Download and load it in LM Studio, then select its model id in the bot."
+echo "Stop the pod when finished."

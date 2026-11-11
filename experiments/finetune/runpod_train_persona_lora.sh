@@ -10,8 +10,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# Keep model/package caches on /workspace so the regular RunPod Volume Disk is
-# the only disk that needs to be sized up for the pilot.
+# Store model and package caches on /workspace.
 export HF_HOME=/workspace/hf_cache
 export TRANSFORMERS_CACHE=/workspace/hf_cache
 export HF_DATASETS_CACHE=/workspace/hf_datasets_cache

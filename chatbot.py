@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 
 def get_token():
-    """Safely read the bot's access token from the token file."""
+    """Read the bot's access token from the configured token file."""
     try:
         with open(config.TOKEN_FILE, "r") as file:
             data = json.load(file)
@@ -189,10 +189,9 @@ class Bot(commands.Bot):
         logging.error(f"twitchio event error: {error!r} | data={data!r}")
 
     async def _warm_axis_cache(self):
-        """Pre-embed the built-in trait dials so the first ~top/~traits after a
-        restart is instant instead of stalling on a cold cache - and doesn't
-        error if the model server happens to be down right when someone runs it.
-        Retries quietly until the embedder answers, then stops."""
+        """Warm built-in trait embeddings through the shared model queue.
+
+        Try up to 30 times; return once the cached axes are ready."""
         from services import model_queue
         from utils import persona_traits
         for _ in range(30):
@@ -222,12 +221,8 @@ class Bot(commands.Bot):
             await asyncio.sleep(30)
 
     async def _connection_watchdog(self):
-        """Backstop for the 'zombie' state: if twitchio's own reconnect ever
-        fails after a network fault, the process stays alive but stops receiving
-        ANY data from Twitch (even server PINGs, which arrive ~every 5 min). If
-        nothing has come in for STALE_SECONDS, the socket is dead - exit so the
-        keep-alive loop respawns a fresh, connected worker (the OS releases the
-        single-instance lock on exit)."""
+        """Exit after 15 minutes without IRC traffic so the external keep-alive
+        loop can restart the process."""
         STALE_SECONDS = 15 * 60
         while True:
             await asyncio.sleep(60)
@@ -242,11 +237,10 @@ class Bot(commands.Bot):
 
 
 def acquire_single_instance_lock():
-    """Bind a localhost port as a machine-wide mutex. A second chatbot.py
-    from the keep-alive loop, the login autostart, or a manual launch - fails
-    the bind and exits instead of double-connecting to Twitch (which makes the
-    bot answer every command twice). The OS releases the port on ANY exit, so
-    a crash can never wedge the lock."""
+    """Bind the loopback instance port and exit if it is already in use.
+
+    Keep the returned socket alive for the process lifetime; the OS releases
+    the bound port when the process exits."""
     import socket
     import sys
     lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

@@ -1,15 +1,10 @@
-"""Implicit funniness labels: score chat's reaction to the bot's own lines.
+"""Record laugh-emote matches and bot mentions after generated lines.
 
-The user's insight: we don't need to ask anyone whether a persona line landed
-chat tells us. After the bot posts a persona/generate line, watch the next
-~60s of that channel: laugh emotes (KEKW/LMAO/OMEGALUL...), replies that
-mention the bot, and general burst are summed into a reaction score that gets
-appended to the persona log (type=reaction_feedback). Over weeks this becomes
-a labeled funniness dataset for free - the training signal for the judge
-problem (which generations actually land), no oracle time spent.
+Watch up to ~60s or 14 messages per window. Log laugh matches, mentions,
+message count and distinct responders. reaction_score is laughs plus twice
+bot mentions.
 
-Never raises into the message path; windows are tiny and self-expiring.
-"""
+Exceptions are logged without propagating into the message path."""
 
 import logging
 import re

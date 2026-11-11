@@ -1,13 +1,7 @@
-"""Local language detection via lingua - free, no API.
+"""Local language detection with lingua.
 
-lingua is far more accurate than the old langdetect on short text, and crucially
-its confidence scores are *calibrated*: junk/emotes/short-English score low, real
-foreign sentences score high. That makes a confidence threshold actually work.
-
-Detection is restricted to the languages the bot supports (config.SUPPORTED_LANGS),
-which keeps it from guessing obscure languages. Codes are returned in the bot's
-uppercase scheme (e.g. "EN", "ES", "ZH-CN").
-"""
+Return language confidence scores for the configured supported-language set
+plus English. Codes use the bot's uppercase scheme, such as EN, ES and ZH-CN."""
 
 from lingua import Language, LanguageDetectorBuilder
 
@@ -27,9 +21,7 @@ _CODE_TO_LANG = {
 # lingua iso code -> bot code (only the ones that differ)
 _ISO_TO_CODE = {"ZH": "ZH-CN"}
 
-# Build a detector restricted to the configured supported languages. Always keep
-# English in the set so English is a candidate (and gets correctly identified
-# rather than forced into a foreign language).
+# Always include English among the configured language candidates.
 _langs = {_CODE_TO_LANG[c] for c in config.SUPPORTED_LANGS if c in _CODE_TO_LANG}
 _langs.add(Language.ENGLISH)
 _detector = LanguageDetectorBuilder.from_languages(*_langs).build()

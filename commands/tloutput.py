@@ -40,4 +40,4 @@ async def handle_tloutput(bot, message, params):
     # --- Local and whisper modes ---
     update_user_setting(message.author.id, 'output_mode', mode)
     update_user_setting(message.author.id, 'output_channel', None)
-    await message.channel.send(f"Output mode set to **{mode}** (will send in the same channel).")
+    await message.channel.send(f"Output mode set to **{mode}**.")

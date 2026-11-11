@@ -3,7 +3,7 @@
 Most archive-derived features fail the same way when junk is treated as human
 signal: bot commands, pasted logs, translation boilerplate, pure emote spam,
 keyboard smash, links, and repeated copypasta. Keep those rules centralized so
-RAG, embeddings, `~iq`, oracle queues, and future training exports do not drift
+RAG, embeddings, analysis and training exports do not drift
 into separate local hacks.
 """
 
@@ -302,7 +302,8 @@ def _semantic_key(text: str) -> str:
 
 
 def semantic_information_score(text: str) -> float:
-    """Generic retrieval value, independent of any person or trait label."""
+    """Heuristic score from length, unique-token share, selected connectives
+    and question marks."""
     words = tokens(text)
     if not words:
         return 0.0
@@ -329,12 +330,8 @@ def select_semantic_units(
     max_words: int = 70,
     coverage_share: float = 0.80,
 ) -> tuple[list[dict], dict]:
-    """Select a deterministic coverage lane plus a high-information tail.
-
-    Exact normalized repeats are collapsed first. The coverage lane preserves
-    an unbiased view for person/topic averages; the smaller high-information
-    lane improves RAG and peak-style analyses without distorting those means.
-    """
+    """Select deterministic hash-ranked coverage units plus a tail ranked by
+    the information heuristic. Collapse normalized repeats before selection."""
     candidates = []
     seen = set()
     source_count = 0

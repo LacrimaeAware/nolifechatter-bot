@@ -1,7 +1,6 @@
 # Archive experiments and research questions
 
-These are proposed evaluations of implemented components. The table defines
-what to test; it does not report completed benchmark results.
+Proposed evaluations of existing bot components.
 
 | Question | Existing component | Comparison | Evaluation |
 |---|---|---|---|
@@ -11,27 +10,17 @@ what to test; it does not report completed benchmark results.
 | Which retrieval choices preserve a requested style without copying source lines? | `utils/persona_llm.py` and `utils/persona_generate.py`. | Random examples, distinctive examples and topic-matched examples using the same model and prompt budget. | Blinded ratings from consenting participants, source overlap and task relevance. |
 | How does the model queue behave under bursts? | `services/model_queue.py`. | Fixed synthetic request workloads with timeouts, cancellations and model-off transitions. | Queue wait, completion time, cancellation behavior and interference with non-model commands. |
 
-## A useful first study
+## Archive retrieval study
 
-Start with archive retrieval. Build a small synthetic conversation set with
+One proposed study uses a small invented conversation set with
 known answers and supporting message IDs. Include direct lookup, paraphrase,
 conversation-context and unanswerable questions. Hold the question set fixed
 before tuning retrieval, and save each retrieved context and response.
 
-This produces a runnable evaluation of a central bot component without
-requiring a live stream or publishing chat logs. A later permissioned dataset
-could test whether the result transfers to real conversations.
+## Interpreting analysis scores
 
-## Project boundaries
-
-- The runtime bot handles translation, commands, settings and live operation.
-- The archive layer handles storage, search and retrieval.
-- Research experiments compare those components under stated conditions.
-- Fine-tuning is an optional offline path with its own data and evaluation needs.
-
-These can remain directories within one repository until their dependency and
-release needs justify separate packages. Public examples should use synthetic
-or permissioned data. Authorship similarity is not identity verification, and
-text-derived trait scores are not validated psychological measurements.
+Authorship similarity scores compare messages; they do not verify a person's
+identity. Trait scores describe patterns in text and have not been validated
+as psychological measurements.
 
 [Project overview](../README.md) · [Archive schema](CHAT_ARCHIVE.md) · [Command reference](COMMANDS.md)

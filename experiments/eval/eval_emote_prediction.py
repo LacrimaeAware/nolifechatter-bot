@@ -1,19 +1,11 @@
-"""Emote-prediction dial: can a model pick the emote a chatter actually used?
+"""Test whether a model selects the archived emote from a set of options.
 
-Masks the (single) registry emote in real archived messages and asks the
-local LLM to choose it from a lineup of distractors. Every archived message
-with an emote is a free labeled example, so this is an unlimited,
-self-supervised validation target for "does the system understand emotes"
-usable to compare prompts, models, or a LoRA before/after.
+Sample filtered messages containing one registry emote, mask it, and ask the
+configured chat model to choose among distractors. Report accuracy alongside
+chance (1 / option count) and lineup-frequency baselines.
 
-Baselines reported alongside accuracy:
-  - chance        = 1/len(options)
-  - frequency     = always guess the globally most-common emote in the lineup
-
-    python experiments/eval/eval_emote_prediction.py                 # n=40
-    python experiments/eval/eval_emote_prediction.py --n 100 --options 8
-    python experiments/eval/eval_emote_prediction.py --author someuser   # one chatter
-"""
+    python experiments/eval/eval_emote_prediction.py [--n 100] [--options 8]
+    python experiments/eval/eval_emote_prediction.py --author someuser"""
 
 from __future__ import annotations
 

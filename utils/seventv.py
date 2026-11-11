@@ -86,9 +86,8 @@ def set_emotes(set_id):
 
 
 def search(query, limit=12):
-    """[(id, name, channels), ...] best matches, ranked like the 7TV site and
-    PotatBotat: exact-name matches first, then the MOST-USED version (channel
-    count) - so `add BigIron` adds the popular BigIron, not a dead fork."""
+    """Return [(id, name, channels), ...], ranking exact names first,
+    then prefixes, then channel count among returned matches."""
     items = (_gql(_SEARCH, {"query": query, "limit": limit})
              .get("emotes") or {}).get("items") or []
     q = query.lower()

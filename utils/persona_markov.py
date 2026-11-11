@@ -1,17 +1,7 @@
-"""Zero-cost persona generator: per-user Markov word chains.
+"""Per-user Markov word-chain generator built from archived messages.
 
-Builds an order-N word-level Markov model from everything a user has said in
-the archive, then samples new messages from it. No LLM, no API, no network
-just statistical recombination of their *own* words, so it reproduces their
-vocabulary, emotes and cadence for free and with no provider content policy in
-play. (It does NOT understand conversation context - that's what the LLM
-persona described in docs/GENERATE_AND_BOT_MODES.md is for. This is the warm-up
-toy and the always-available fallback.)
-
-Output is recombined real chat, so it can reproduce whatever the source said,
-slurs included - see the persona docs on Twitch-side output filtering before
-any of this is ever posted to chat.
-"""
+Sample word sequences without calling a model API. Source words can reappear
+in generated output; posting paths use the configured output filter."""
 
 import random
 import re
@@ -105,7 +95,7 @@ def sample(author: str, n: int = 5, order: int = 2, max_words: int = 40, seed=No
         return None, []
     rng = random.Random(seed)
     lines = []
-    for _ in range(n * 4):  # oversample, drop empties / verbatim echoes, dedupe
+    for _ in range(n * 4):  # oversample, drop empties and duplicate generated lines
         line = generate(model, max_words=max_words, rng=rng)
         if line and len(line.split()) >= order and line not in lines:
             lines.append(line)

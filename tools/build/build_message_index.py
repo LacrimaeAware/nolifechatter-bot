@@ -1,17 +1,10 @@
-"""Per-utterance embedding index for roster authors (Bucket C #17b/#18 base).
+"""Build a per-message or per-utterance embedding index for roster authors.
 
-Person-level mean vectors answer "who is this person overall"; per-unit
-vectors unlock the two things means can't do:
-- burst traits: someone who is extremely doomer in 10% of messages and
-  neutral otherwise averages to mild - per-message projections catch the tail
-- semantic persona retrieval: find the author's messages closest in MEANING
-  to the live conversation, instead of FTS keyword overlap
+The index supports nearest-vector retrieval and trait-axis projections.
+Store aligned float16 vectors and texts in data/unsynced/msg_index/<author>.npz;
+load author files lazily.
 
-Storage: data/unsynced/msg_index/<author>.npz with float16 vectors + the
-texts (aligned). ~3MB per 1000 units per author; loaded lazily.
-
-    python tools/build/build_message_index.py [--per-author 3000]
-"""
+    python tools/build/build_message_index.py [--per-author 3000]"""
 
 import argparse
 import os

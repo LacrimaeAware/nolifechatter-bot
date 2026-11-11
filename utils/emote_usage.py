@@ -1,14 +1,9 @@
-"""Honest 7TV emote usage for a channel - shared by tools/archive/emote_usage.py
-and the ~leastused command.
+"""Channel emote usage for tools/archive/emote_usage.py and ~leastused.
 
-Better than a rolling-window bot count:
-- usage = DISTINCT archived messages containing the emote (spamming it 50x in
-  one message counts once)
-- rows deduped first (the archive triple-stores messages across log sources)
-- lifetime-aware: each emote's 7TV add-date clamps its window and ranking is
-  uses-per-day-AVAILABLE, so a month-old emote isn't punished for being new
-- bots, bot commands, and 7TV add/remove system lines don't count
-"""
+Count each emote token at most once per archived message, filter probable
+duplicate rows, and rank by uses per week available in the configured window.
+Availability starts at the later of the window start and recorded add-date.
+Bot names, command prefixes and system-line patterns are filtered out."""
 
 import glob
 import json
@@ -65,10 +60,9 @@ def seven_tv_set(*, set_id=None, room_id=None):
 
 
 def rename_history(channel):
-    """{current_name: [every name this emote has been known by]} for the
-    channel, parsed from local Chatterino logs (the only place 7TV rename
-    events are recorded). Cached until the newest log file changes. Empty when
-    the logs aren't on this machine - counting then just uses current names."""
+    """Names recovered from local Chatterino rename-event lines, grouped by
+    current name. Cached until the newest log file changes. Without local logs,
+    counting uses current names."""
     base = config.CHATTERINO_LOG_BASE
     d = os.path.join(base, chat_archive.normalize_channel(channel)) if base else ""
     files = sorted(glob.glob(os.path.join(d, "*.log"))) if d and os.path.isdir(d) else []

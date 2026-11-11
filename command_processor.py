@@ -7,8 +7,8 @@ from utils import cooldowns
 from utils.command_bans import is_banned
 
 # Commands that hit LM Studio hard enough to share one global lane across all
-# channels. Optional model polish (~askchat/~emote) is queued by those handlers
-# only after their local evidence pass proves a model call is useful.
+# channels. Optional model-written answers (~askchat/~emote) are queued by their
+# handlers after local evidence retrieval.
 MODEL_REQUIRED_COMMANDS = {
     "persona", "pers", "hyper", "generate", "ragebait",
     "irony",

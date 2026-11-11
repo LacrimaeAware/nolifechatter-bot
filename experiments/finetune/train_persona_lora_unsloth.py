@@ -1,11 +1,7 @@
-"""Train a persona LoRA on a rented NVIDIA GPU with Unsloth.
+"""Train a persona LoRA with Unsloth on a CUDA-capable NVIDIA GPU.
 
-Run this on the GPU pod, not on the local Windows/AMD machine.
-
-Expected inputs are the JSONL files created by experiments/finetune/export_persona_sft.py.
-The script saves a LoRA adapter directory. Merging/quantizing to GGUF for LM
-Studio is a separate step after the pilot looks good.
-"""
+Read JSONL exported by experiments/finetune/export_persona_sft.py and save an
+adapter directory. Merging and GGUF quantization are separate steps."""
 
 from __future__ import annotations
 

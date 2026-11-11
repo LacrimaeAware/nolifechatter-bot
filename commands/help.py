@@ -157,7 +157,7 @@ async def handle_help(bot, message, params):
             f"{bot.prefix}ragebait {bot.prefix}irony | default AI, local mode available: "
             f"{bot.prefix}generate (engine=markov) | AI only for uncached/live analysis: "
             f"{bot.prefix}top {bot.prefix}bottom {bot.prefix}axis {bot.prefix}why "
-            f"{bot.prefix}traits {bot.prefix}distinct | optional AI polish with local fallback: "
+            f"{bot.prefix}traits {bot.prefix}distinct | optional model-written answers with archive fallback: "
             f"{bot.prefix}askchat {bot.prefix}emote {bot.prefix}explain | no-AI persona: "
             f"{bot.prefix}mimic"
         )

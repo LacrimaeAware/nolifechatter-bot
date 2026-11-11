@@ -1,20 +1,8 @@
-"""Dynamic + emote-aware trait axes (Bucket C #17, first slices).
+"""Dynamic example-sentence axes and text/emote projections.
 
-Two upgrades over the static persona_traits axes:
-
-1. **Dynamic axes**: ~top <anything> - if no axis exists, the local LLM writes
-   pole example sentences for the term and its opposite, they're embedded
-   into an axis, and the axis is SAVED (data/unsynced/custom_axes.pkl). If a
-   later request is semantically a duplicate (axis-direction cosine >= 0.80,
-   e.g. racism vs bigot), the new name merges as an alias of the existing
-   axis instead of fragmenting.
-
-2. **Emote-name semantics**: emote names are self-describing (ApuDoomer,
-   FeelsBadMan, ICANTSTOPFUCKINGDESPAIRING), and for short-form posters the
-   trait signal lives THERE, not in their prose. Each person gets an
-   emote-vector (their profile's distinctive emotes, log-odds weighted, name
-   embeddings mean-pooled); axis projections blend text 0.75 / emotes 0.25.
-"""
+Build and cache custom pole-example axes, merging directions at MERGE_COSINE.
+Per-author emote vectors use log-odds-weighted usage vectors, with name-vector
+fallback. Axis scores blend text 0.75 and emotes 0.25."""
 
 import json
 import logging
@@ -172,17 +160,11 @@ def _extract_json(raw: str):
 
 
 def _generate_poles(term):
-    """LLM-written pole sentences for an arbitrary trait term, validated.
+    """Generate pole examples and check probe orientation in embedding space.
 
-    Two failure modes guarded here (both observed live): the model writes
-    pole examples from the VICTIM'S/critic's perspective for charged traits
-    (an aligned model's dodge - the first 'racism' axis came out measuring
-    confrontation, not racism), and generic mush. Fixes: demand first-person
-    trait-holder voice, VALIDATE - the term's own embedding must align with
-    the trait pole more than the opposite pole - and keep the abliterated
-    LoRA only as a last-resort fallback for charged traits (it can't reliably
-    emit JSON anymore; see chain comment). Returns
-    (opposite_label, pos_sentences, neg_sentences) or None."""
+    Accept when the contextualized term has greater cosine with the positive-pole
+    mean than the negative-pole mean. Return
+    (opposite_label, pos_sentences, neg_sentences), or None."""
     import numpy as np
     _clear_axis_error(term)
     # Model order MEASURED 2026-07-19: the persona-LoRA starts the JSON then
@@ -231,15 +213,14 @@ def _generate_poles(term):
             opp = re.sub(r"[^a-z0-9_-]", "", str(d.get("opposite", "")).lower()) or f"non-{term}"
             if len(pos) < 3 or len(neg) < 3:
                 continue
-            # validate with a CONTEXTUALIZED term - bare words like 'maga'
-            # embed weakly; the phrase aligns reliably when poles are right
+            # Compare pole means with the contextualized term embedding.
             probe = f"a person who is extremely {term}"
             embs = _embed([probe] + pos + neg)
             t = np.asarray(embs[0]); t /= (np.linalg.norm(t) + 1e-9)
             P = np.asarray(embs[1:1 + len(pos)]).mean(axis=0)
             N = np.asarray(embs[1 + len(pos):]).mean(axis=0)
             P /= (np.linalg.norm(P) + 1e-9); N /= (np.linalg.norm(N) + 1e-9)
-            if float(t @ P) > float(t @ N):   # poles face the right way
+            if float(t @ P) > float(t @ N):   # positive pole is nearer the probe
                 _clear_axis_error(term)
                 return opp, pos, neg
             _set_axis_error(term, "axis poles failed validation")
@@ -364,8 +345,8 @@ def resolve_axis(term):
 def axis_cached(term) -> bool:
     """True if `term` already resolves with NO model or embedding call - a
     built-in pole, a saved custom axis, one of its aliases, or its opposite
-    pole (opposites are stored together, so ~top intelligent reuses the
-    low-iq axis). Lets the dispatcher run already-built axes on the fast path
+    pole (opposites share the same stored axis). Lets the dispatcher run
+    already-built axes on the fast path
     instead of queuing them behind live LLM axis builds."""
     term = (term or "").lower().strip()
     if not term:
@@ -380,18 +361,13 @@ def axis_cached(term) -> bool:
 
 
 def merge_axes(canonical, dup, *, opposite=False):
-    """Fold the saved axis `dup` into `canonical` - human-curated dedup.
+    """Manually merge saved axis dup into canonical, routing its aliases by pole.
 
-    Automatic merging is unreliable (measured: no cosine threshold separates
-    synonyms from distinct concepts, and the LLM hands out generic opposites
-    like 'american' for german/french/czech), so collapsing duplicates is an
-    explicit action, not a guess.
-
-    opposite=False: `dup` names the SAME pole as `canonical` - its name and
-      aliases become positive aliases of `canonical`.
-    opposite=True:  `dup` names the OPPOSITE pole - its name and aliases become
-      NEGATIVE aliases, so ~top <dup> ranks toward canonical's opposite pole.
-    Returns a short summary. Raises KeyError if either axis is missing."""
+    Recorded comparisons found overlapping cosine ranges for synonyms and distinct
+    concepts; this helper supports manual corrections to the automatic merges.
+    opposite=False routes dup's positive labels to canonical's positive aliases.
+    opposite=True reverses the poles. Returns a short summary; raises KeyError
+    if either axis is missing."""
     custom = _load_custom()
     if canonical not in custom:
         raise KeyError(f"no saved axis {canonical!r}")
@@ -535,10 +511,8 @@ def axis_labels(axis_name):
 
 
 def axis_scores(axis_name):
-    """{author: z} on an axis, blending text and emote-name semantics.
-    Short-form posters whose traits live in their emotes get read correctly.
-    Built-in axes use the orthogonalized directions (independent dials);
-    custom axes project on their own raw direction."""
+    """Return roster z-scores from blended text and emote projections.
+    Built-ins use orthogonalized directions; custom axes use their saved direction."""
     import numpy as np
     av = scoring_axis_vector(axis_name)
     text = persona_embeddings._centered()
@@ -556,10 +530,8 @@ def axis_scores(axis_name):
 
 
 def most_distinct(n=5, reverse=False):
-    """People whose personality deviates most from the room average - total
-    |z| summed across the five built-in axes. Returns
-    [(author, total, [defining trait labels]), ...]. The built-in axes only,
-    so the metric is stable regardless of what custom axes chat has built."""
+    """Sum absolute roster z-scores across the five built-in axes.
+    Return [(author, total, top-axis labels), ...]. Custom axes do not affect this sum."""
     from utils.persona_traits import AXES
     per = {}
     for axis in AXES:

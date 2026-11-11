@@ -1,9 +1,6 @@
-"""Evidence-backed archive/lore question helpers.
+"""Archive question helpers.
 
-This is retrieval first, answer second: return receipts from the archive,
-fact-bank claims, and emote meaning data instead of inventing a polished answer
-without sources.
-"""
+Retrieve archive messages, stored claims and emote records for archive questions."""
 
 from __future__ import annotations
 
@@ -270,20 +267,13 @@ def _recover_author_meta(author: str, texts: list[str], *, channel: str | None =
 
 def _rrf_author_hits(author: str, query: str, *, channel: str | None = None,
                      limit: int = 5, rrf_k: int = 60) -> list[dict]:
-    """Author archive hits fusing the bm25 lane (_author_hits) with the dense
-    semantic lane (persona_msg_index) by Reciprocal Rank Fusion:
+    """Fuse lexical and dense author-hit rankings by Reciprocal Rank Fusion:
 
         score(line) = 1/(k + rank_bm25) + 1/(k + rank_dense)
 
-    RRF needs no score calibration between bm25 and cosine (it is rank-only),
-    so it is robust on the un-whitened embedding space and can never rank below
-    the better single lane. bm25 stays the first lane so the strong keyword
-    baseline is never silently lost; dense only ADDS paraphrase recall (the
-    'does X like cars' -> 'my civic rips' case that shares no keywords). Falls
-    back to pure bm25 when the index or embedder is unavailable.
-
-    Each returned item keeps the archive schema (id/sent_at/channel/author/text)
-    plus a 'lanes' tag for transparency."""
+    RRF combines ranks without calibrating bm25 and cosine scores. Fall back to
+    lexical results when dense retrieval is unavailable. Returned items retain
+    archive metadata and a lanes tag identifying each retrieval source."""
     from utils import persona_msg_index
 
     pool = max(limit * 4, 12)
@@ -318,11 +308,8 @@ def _rrf_author_hits(author: str, query: str, *, channel: str | None = None,
             seen_keys.add(key)
             dense_ranked.append((key, text, float(score)))
 
-    # recover metadata (sent_at/channel) for dense lines bm25 didn't surface.
-    # NOTE: exact-content recovery works for single-message utterances; a MERGED
-    # multi-message utterance has no single matching row, so it drops here. Fixing
-    # that fully needs the message index to store row ids (a rebuild) - until then
-    # the dense lane adds single-message paraphrase recall, not merged-utterance.
+    # Recover exact rows or reconstruct matching channel-bounded utterance
+    # records, retaining component IDs for merged messages.
     bm25_by_key = {chat_archive.line_match_key(h["text"]): h for h in bm25}
     bm25_by_key.pop(None, None)
     missing = [text for key, text, _score in dense_ranked if key not in bm25_by_key]
@@ -362,9 +349,7 @@ def _rrf_author_hits(author: str, query: str, *, channel: str | None = None,
 
 
 def _chatworthy_fact(fact: dict) -> bool:
-    # Profile-slot facts are always presentable: they were LLM-verified in
-    # context and _fact_phrase carries their status label (unconfirmed/
-    # disputed), so a labeled lead beats a blank "not mentioned".
+    # Profile-slot claims retain the status label rendered by _fact_phrase.
     if str(fact.get("kind", "")).startswith("profile:"):
         return True
     return (
@@ -396,10 +381,7 @@ def _near_author(author: str, query: str, *, channel: str | None = None, limit: 
     ]
 
 
-# A question's words never overlap its answer's words ("where does X live"
-# shares nothing with "germany"), so profile facts are routed by QUESTION
-# INTENT, not term overlap. Each pattern maps a question shape to the slot
-# that answers it.
+# Route recognized question forms to profile slots.
 _SLOT_INTENTS = [
     ("location", re.compile(
         r"\bwhere\b.*\b(live|from|located|based)\b|\bwhat country\b|\bnationality\b", re.I)),
@@ -431,13 +413,11 @@ def _profile_entries(data: dict) -> list[dict]:
 
 
 def _profile_hits(author: str | None, query: str, limit: int = 3) -> list[dict]:
-    """Slot-profile facts (verified profile v5) for the scoped author.
+    """Slot-profile claims for the scoped author.
 
-    Slots whose question-intent matches the query are served at ANY status
-    ~askchat is an explicit lookup, so a labeled candidate with a receipt
-    beats a blank "not mentioned". Everything else serves confirmed-only via
-    term overlap. Profile hits outrank v1 regex claims: each was LLM-verified
-    in context and (when confirmed) corroborated on >= 2 independent days."""
+    Question-intent matches can return any stored status. Other matches require
+    confirmed status and term overlap. Results retain their status and distinct-day
+    support, and take priority over regex claim-bank matches."""
     if not author:
         return []
     try:
@@ -449,9 +429,8 @@ def _profile_hits(author: str | None, query: str, limit: int = 3) -> list[dict]:
     terms = {t.casefold() for t in chat_archive.query_terms(query)}
     out = []
     for slot, data in prof.items():
-        # Once a slot has established evidence, candidates are noise. For a
-        # disputed single-value slot, preserve both the primary and its
-        # independently supported alternatives.
+        # Prefer confirmed/disputed entries when present. For a disputed slot,
+        # retain the primary value and supported alternatives.
         entries = _profile_entries(data)
         for entry in entries:
             status = entry.get("status", "candidate")
@@ -497,8 +476,7 @@ def _query_mentions_author(query: str, author: str) -> bool:
 def _fact_hits(author: str | None, query: str, limit: int = 4) -> list[dict]:
     rows = fact_bank.load_jsonl()
     out = _profile_hits(author, query, limit=max(2, limit - 1))
-    # A confirmed profile fact answers the question; v1 regex claims can only
-    # dilute it ("says they are 'accepting what youre saying...'").
+    # Prefer returned profile claims with confirmed status over regex claims.
     if any(h.get("status") == "confirmed" for h in out):
         return out
     if not rows:
@@ -570,12 +548,8 @@ def _emote_hits(query: str, limit: int = 2) -> list[dict]:
 
 
 def _attach_context(hits: list[dict]) -> list[dict]:
-    """Attach safe chronological context to retrieved archive receipts.
-
-    `chat_archive.context_window` already refuses invented conversation for
-    author-only sources and dedupes alias-mirrored rows. Commands and utility
-    bots are omitted here so the answer model sees the human exchange.
-    """
+    """Attach neighboring archive messages to retrieved hits, omitting command
+    and bot rows from the surrounding context."""
     out = []
     for original in hits:
         hit = dict(original)
@@ -672,12 +646,8 @@ def _fact_phrase(fact: dict, claim_len: int = 150) -> str:
 
 
 def _focused_archive_hits(report: dict) -> list[dict]:
-    """Archive receipts strong enough to cite to the answer model.
-
-    Retrieval can use loose dense/paraphrase lanes, but the live answer should
-    not cite a line unless it still matches the cleaned topic terms. This keeps
-    question scaffolding such as "opinion" from turning into random evidence.
-    """
+    """Keep hits matching focus terms or dense hits above the unanchored
+    similarity threshold."""
     hits = report.get("archive", []) or []
     focus = _focus_terms(report.get("query", ""), report.get("author"))
     if not focus:

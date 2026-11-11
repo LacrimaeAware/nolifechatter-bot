@@ -131,9 +131,8 @@ def semantic_hits(author, query_text, k=8):
 
 
 def burst_scores(axis_name, pct=90):
-    """{author: z} where the raw score is the pct-th percentile of the
-    author's per-message projections on the axis: 'how strong are their
-    strongest moments', immune to dilution by neutral filler."""
+    """Return roster z-scores of each author's pct-th percentile projection
+    on the selected axis."""
     import numpy as np
     signature = _index_signature()
     cached = _burst_cache.get(axis_name)
@@ -163,15 +162,11 @@ def burst_scores(axis_name, pct=90):
 
 
 def contradiction_scores(axis_name, lo_pct=10, hi_pct=90):
-    """{author: z} for self-contradiction on an axis: how much a person occupies
-    BOTH poles at once. A sincere chatter clusters at one end; a performative /
-    ironic one has messages at both (the user's 'high in both feminism and
-    misogyny' signal). Computed as sqrt(frac above the global hi-pole percentile
-    * frac below the global lo-pole percentile), z-scored across the roster.
+    """Return roster z-scores of two-tail axis occupancy.
 
-    No oracle, no single-message intent call: it reads the per-message cloud the
-    mean-pool throws away. A high score means the person's CHARGED-axis mean is
-    unreliable - they perform both ends. Same axis selection as burst_scores."""
+    For each author, take sqrt(frac above the global hi_pct percentile * frac
+    below the global lo_pct percentile), then standardize across authors.
+    Use the same axis selection as burst_scores."""
     import numpy as np
     signature = _index_signature()
     cached = _contra_cache.get(axis_name)

@@ -9,8 +9,8 @@ from typing import List, Optional
 
 # Import per-language romanizers
 from utils.roman_scripts import thai as _th      # requires PyThaiNLP on the server
-from utils.roman_scripts import korean as _ko    # your KO romanizer
-from utils.roman_scripts import japanese as _ja  # your JA romanizer
+from utils.roman_scripts import korean as _ko
+from utils.roman_scripts import japanese as _ja
 
 # >>> Only these languages get an L-ROM whisper <<<
 _SUPPORTED_ROMAN = {"TH", "KO", "JA"}

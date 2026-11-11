@@ -1,4 +1,4 @@
-"""Query the chat archive from the command line (full, unabridged answers).
+"""Query the chat archive from the command line.
 
     python tools/archive/ask_archive.py said <user> <phrase...>   # did X ever say Y
     python tools/archive/ask_archive.py near <user> <phrase...>   # closest lines by X
@@ -7,7 +7,7 @@
     python tools/archive/ask_archive.py search <phrase...>        # all authors
 
 The in-chat commands (~said, ~quote, ...) answer the same questions but keep
-replies Twitch-short; this CLI shows everything.
+replies Twitch-short; this CLI prints complete message text.
 """
 
 import os

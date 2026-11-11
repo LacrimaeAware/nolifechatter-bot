@@ -1,8 +1,6 @@
-"""Shared gate for LM Studio work.
+"""Process-wide queue for model requests.
 
-Commands, resident personas, and ambient persona reactions all compete for the
-same local GPU/model server. This module gives them one process-wide lane so
-they do not stampede LM Studio and then report misleading "offline" failures.
+Commands, resident personas and ambient reactions share one request lane.
 """
 
 import asyncio
@@ -219,7 +217,7 @@ async def submit(
     """Run one model job through the shared queue.
 
     model_kind is "required" for work that cannot answer without local AI and
-    "optional" for best-effort model polish. Optional work is skipped when the
+    "optional" for optional model-written output. Optional work is skipped when the
     model is disabled/unavailable/busy; its caller supplies the local fallback.
     work must be an async callable.
     """

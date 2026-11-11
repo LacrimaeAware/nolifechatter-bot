@@ -52,7 +52,7 @@ sys.modules["services.llm"] = types.SimpleNamespace(
     failure_kind=lambda: None,
     failure_message=lambda command="": f"~{command} failed: local AI unavailable.",
 )
-from utils import archive_qa, artifact_status, atomic_file, chat_archive, emote_explain, fact_bank, irony, message_quality, persona_classifier, persona_embeddings, persona_iq, persona_llm, persona_msg_index, resident_persona, user_profiles  # noqa: E402
+from utils import archive_qa, artifact_status, atomic_file, chat_archive, emote_explain, fact_bank, irony, message_quality, persona_classifier, persona_embeddings, persona_llm, persona_msg_index, resident_persona, user_profiles  # noqa: E402
 from utils import persona_axes  # noqa: E402
 from services import model_queue  # noqa: E402
 from commands import markers, why  # noqa: E402
@@ -94,12 +94,11 @@ class RebuildPipelineTests(unittest.TestCase):
                 "--skip-style-profiles",
                 "--skip-embeddings",
                 "--skip-message-index",
-                "--skip-fact-bank",
             ]
 
             def fake_run(name, _cmd, dry_run=False):
                 calls.append((name, dry_run))
-                return 7 if name == "text-IQ" else 0
+                return 7 if name == "claim receipt bank" else 0
 
             rebuild_persona_artifacts.run_step = fake_run
             with contextlib.redirect_stdout(io.StringIO()):
@@ -110,7 +109,7 @@ class RebuildPipelineTests(unittest.TestCase):
         self.assertEqual(code, 7)
         self.assertEqual(
             [name for name, _dry in calls],
-            ["text-IQ", "trait axis smoke"],
+            ["claim receipt bank", "trait axis smoke"],
         )
 
     def test_maintenance_log_rejects_traceback_even_with_zero_exit_tail(self):
@@ -1155,7 +1154,7 @@ class ArchiveQaPureTests(unittest.TestCase):
         self.assertIn("wrong country", joined)
         self.assertNotIn("mass shooting", joined)
 
-    def test_evidence_items_keep_high_confidence_dense_paraphrase(self):
+    def test_evidence_items_keep_high_cosine_dense_paraphrase(self):
         report = {
             "query": "does he like cars",
             "author": "mainuser",
@@ -1425,279 +1424,6 @@ class EmoteExplainPureTests(unittest.TestCase):
         )
 
 
-class PersonaIqPureTests(unittest.TestCase):
-    def test_required_iq_quality_rejects_missing_model_phases(self):
-        failures = persona_iq._quality_failures(
-            embedding_requested=True,
-            embedding_authors=0,
-            judge_requested=True,
-            judged_authors=5,
-            total_authors=40,
-        )
-        self.assertEqual(len(failures), 2)
-        self.assertIn("embeddings covered 0/40", failures[0])
-        self.assertIn("judge covered 5/40", failures[1])
-
-    def test_optional_iq_phases_do_not_degrade_lexical_build(self):
-        self.assertEqual(persona_iq._quality_failures(
-            embedding_requested=False,
-            embedding_authors=0,
-            judge_requested=False,
-            judged_authors=0,
-            total_authors=40,
-        ), [])
-
-    def test_utterance_rows_dedupes_repeated_personal_lines(self):
-        original = persona_iq.chat_archive.iter_utterance_records_for
-        try:
-            persona_iq.chat_archive.iter_utterance_records_for = lambda _author: iter([
-                {"id": 1, "text": "because this model predicts the same result",
-                 "parts": [(1, "because this model predicts the same result")]},
-                {"id": 2, "text": "Because this model predicts the same result!",
-                 "parts": [(2, "Because this model predicts the same result!")]},
-                {"id": 3, "text": "however the counterexample changes the conclusion",
-                 "parts": [(3, "however the counterexample changes the conclusion")]},
-            ])
-            rows = persona_iq._utterance_rows("mainuser", author_cap=100)
-        finally:
-            persona_iq.chat_archive.iter_utterance_records_for = original
-        self.assertEqual(len(rows), 2)
-
-    def test_utterance_rows_rejects_command_generated_reply(self):
-        original_records = persona_iq.chat_archive.iter_utterance_records_for
-        original_previous = persona_iq._preceded_by_model_request
-        try:
-            generated = (
-                "There is no publicly available information confirming that claim. "
-                "The evidence remains inconclusive."
-            )
-            persona_iq.chat_archive.iter_utterance_records_for = lambda _author: iter([
-                {"id": 1, "text": generated, "parts": [(1, generated)]},
-                {"id": 2,
-                 "text": "because the sample changes the conclusion <gemini3 explain it",
-                 "parts": [
-                     (2, "because the sample changes the conclusion"),
-                     (3, "<gemini3 explain it"),
-                 ]},
-            ])
-            persona_iq._preceded_by_model_request = lambda message_id: message_id == 1
-            rows = persona_iq._utterance_rows("mainuser", author_cap=100)
-        finally:
-            persona_iq.chat_archive.iter_utterance_records_for = original_records
-            persona_iq._preceded_by_model_request = original_previous
-        self.assertEqual([row["raw"] for row in rows], [
-            "because the sample changes the conclusion"
-        ])
-
-    def test_utterance_rows_cap_is_bounded_and_deterministic(self):
-        source = [
-            {
-                "id": index,
-                "text": f"because model {index} predicts a different outcome",
-                "parts": [(index, f"because model {index} predicts a different outcome")],
-            }
-            for index in range(100)
-        ]
-        original = persona_iq.chat_archive.iter_utterance_records_for
-        try:
-            persona_iq.chat_archive.iter_utterance_records_for = lambda _author: iter(source)
-            first = persona_iq._utterance_rows("mainuser", author_cap=10)
-            persona_iq.chat_archive.iter_utterance_records_for = (
-                lambda _author: iter(reversed(source))
-            )
-            second = persona_iq._utterance_rows("mainuser", author_cap=10)
-        finally:
-            persona_iq.chat_archive.iter_utterance_records_for = original
-        self.assertEqual(len(first), 10)
-        self.assertEqual(
-            [row["raw"] for row in first],
-            [row["raw"] for row in second],
-        )
-
-    def test_iq_cache_requires_current_identity_and_utterance_provenance(self):
-        payload = {"__meta__": {
-            "version": persona_iq.VERSION,
-            "alias_signature": chat_archive.alias_signature(),
-            "analysis_scope_signature": chat_archive.analysis_scope_signature(),
-            "utterance_version": chat_archive.UTTERANCE_VERSION,
-        }}
-        self.assertTrue(persona_iq._cache_current(payload))
-        payload["__meta__"]["utterance_version"] -= 1
-        self.assertFalse(persona_iq._cache_current(payload))
-
-    def test_iq_cache_rejects_degraded_model_coverage(self):
-        payload = {"__meta__": {
-            "version": persona_iq.VERSION,
-            "alias_signature": chat_archive.alias_signature(),
-            "analysis_scope_signature": chat_archive.analysis_scope_signature(),
-            "utterance_version": chat_archive.UTTERANCE_VERSION,
-            "build_quality": "degraded",
-            "quality_failures": ["judge covered 0/40 authors"],
-        }}
-        self.assertFalse(persona_iq._cache_current(payload))
-
-    def test_iq_cache_rejects_wrong_analysis_cohort(self):
-        payload = {"__meta__": {
-            "version": persona_iq.VERSION,
-            "alias_signature": chat_archive.alias_signature(),
-            "analysis_scope_signature": "wrong-community",
-            "utterance_version": chat_archive.UTTERANCE_VERSION,
-        }}
-        self.assertFalse(persona_iq._cache_current(payload))
-
-    def test_roster_canonicalizes_aliases_and_drops_noise(self):
-        roster = persona_iq._canonical_roster(["oldalt", "mainuser", "helperbot"])
-        self.assertEqual(roster, ["mainuser"])
-
-    def test_rarity_excludes_emote_names_and_usernames(self):
-        freqs = Counter({"epistemology": 5, "omegalul": 500, "mainuser": 40})
-        rarity = persona_iq._rarity_fn(freqs, 20000,
-                                       exclusions={"omegalul", "mainuser"})
-        self.assertIsNone(rarity("omegalul"))
-        self.assertIsNone(rarity("OMEGALUL"))
-        self.assertIsNone(rarity("mainuser"))
-        self.assertIsNotNone(rarity("epistemology"))
-
-    def test_word_frequency_sample_uses_indexed_windows_not_modulo_scan(self):
-        queries = []
-
-        class Result(list):
-            def fetchone(self):
-                return self[0]
-
-        class FakeConnection:
-            def execute(self, query, params=()):
-                queries.append((query, params))
-                if "COUNT(*)" in query:
-                    return Result([(100, 1, 100)])
-                return Result([("alpha beta gamma",)])
-
-        original = persona_iq.chat_archive.connect
-        try:
-            persona_iq.chat_archive.connect = lambda: FakeConnection()
-            counts, total = persona_iq._word_freqs(sample=4)
-        finally:
-            persona_iq.chat_archive.connect = original
-        self.assertEqual(total, 12)
-        self.assertEqual(counts["alpha"], 4)
-        self.assertEqual(len(queries), 5)
-        self.assertTrue(all("id %" not in query for query, _params in queries))
-
-    def test_judge_cache_prunes_people_outside_current_roster(self):
-        original_path = persona_iq.JUDGE_CACHE
-        original_payload = persona_iq._judge_cache_payload
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "judge.pkl"
-            persona_iq.JUDGE_CACHE = str(path)
-            persona_iq._judge_cache_payload = {
-                "__meta__": {"version": persona_iq.JUDGE_CACHE_VERSION},
-                "rows": {"mainuser": {"features": {}}, "outsider": {"features": {}}},
-            }
-            try:
-                removed = persona_iq._prune_judge_cache(["oldalt"])
-                payload = pickle.loads(path.read_bytes())
-            finally:
-                persona_iq.JUDGE_CACHE = original_path
-                persona_iq._judge_cache_payload = original_payload
-        self.assertEqual(removed, 1)
-        self.assertEqual(list(payload["rows"]), ["mainuser"])
-        self.assertEqual(payload["__meta__"]["roster"], ["mainuser"])
-
-    def test_tail_receipts_show_top_tail_median_before_maximum(self):
-        rows = persona_iq._tail_receipts(
-            [(value, f"reasoning example number {value} with enough text")
-             for value in range(20)],
-            "causal",
-        )
-        self.assertEqual([row["value"] for row in rows], [18.0, 19.0])
-
-    def test_cross_author_long_copypasta_is_removed(self):
-        copied = "this is a sufficiently long repeated definition copied into chat"
-        unique = "this is a sufficiently long original explanation from one person"
-        make = lambda text: {"raw": text, "clean": text, "tokens": text.split()}
-        filtered, removed = persona_iq._drop_cross_author_copies({
-            "a": [make(copied), make(unique)],
-            "b": [make(copied)],
-        })
-        self.assertEqual(removed, 2)
-        self.assertEqual([row["raw"] for row in filtered["a"]], [unique])
-        self.assertEqual(filtered["b"], [])
-
-    def test_reasoning_blend_includes_direct_text_structure(self):
-        row = {
-            "causal": 0.0,
-            "nuance": 0.0,
-            "connections": 0.0,
-            "problem_solving": 0.0,
-            "metacognition": 0.0,
-            "reasoning_markers": 2.0,
-            "question_quality": 2.0,
-        }
-        self.assertAlmostEqual(persona_iq._group_scores(row)["reasoning"], 1.3)
-        row["llm_reasoning"] = -1.0
-        self.assertAlmostEqual(
-            persona_iq._group_scores(row)["reasoning"],
-            (0.55 * 1.3) + (0.45 * -1.0),
-        )
-
-    def test_syntax_requires_structure_not_one_short_marker(self):
-        make = lambda text: {
-            "raw": text,
-            "clean": text,
-            "tokens": persona_iq._tokens(text),
-        }
-        short = persona_iq._interpretable_scored(
-            [make("liverpool has not lost though")], lambda _word: 1.0
-        )[0]["syntax_peak"][0][0]
-        structured = persona_iq._interpretable_scored(
-            [make("although the sample is small the result changes because the selection is biased")],
-            lambda _word: 1.0,
-        )[0]["syntax_peak"][0][0]
-        self.assertEqual(short, 0.0)
-        self.assertGreater(structured, short)
-
-    def test_breadth_and_depth_are_topic_geometry_only(self):
-        row = {
-            "topic_breadth": 1.25,
-            "niche_depth": -0.75,
-            "question_quality": 9.0,
-            "technical": 9.0,
-            "vocab_peak": 9.0,
-        }
-        groups = persona_iq._group_scores(row)
-        self.assertEqual(groups["breadth"], 1.25)
-        self.assertEqual(groups["depth"], -0.75)
-
-    def test_judge_cache_reuses_identical_evidence(self):
-        original_path = persona_iq.JUDGE_CACHE
-        original_payload = persona_iq._judge_cache_payload
-        original_chat = persona_iq._chat_sync
-        row = {
-            "raw": "because the sample changed the conclusion after selection",
-            "clean": "because the sample changed the conclusion after selection",
-            "tokens": persona_iq._tokens(
-                "because the sample changed the conclusion after selection"
-            ),
-        }
-        try:
-            with tempfile.TemporaryDirectory() as directory:
-                persona_iq.JUDGE_CACHE = str(Path(directory) / "judge.pkl")
-                persona_iq._judge_cache_payload = None
-                persona_iq._chat_sync = lambda _prompt: (
-                    '{"items":[{"reasoning":3,"abstraction":2,'
-                    '"precision":3,"nuance":2,"authored_chat":4}]}'
-                )
-                first = persona_iq._judge_author("mainuser", [row], items=1)
-                persona_iq._chat_sync = lambda _prompt: (_ for _ in ()).throw(
-                    AssertionError("cache miss")
-                )
-                second = persona_iq._judge_author("mainuser", [row], items=1)
-        finally:
-            persona_iq.JUDGE_CACHE = original_path
-            persona_iq._judge_cache_payload = original_payload
-            persona_iq._chat_sync = original_chat
-        self.assertFalse(first[2])
-        self.assertTrue(second[2])
 
 
 class UserProfilesPureTests(unittest.TestCase):
@@ -2001,7 +1727,7 @@ class UserProfilesPureTests(unittest.TestCase):
             "plausibility": "unusual",
         }])
 
-    def test_irony_format_names_evidence_without_overclaiming(self):
+    def test_irony_format_includes_reason_and_axis_values(self):
         out = irony.format_analysis({
             "verdict": "likely a repeated bit",
             "confidence": "medium",
@@ -2309,19 +2035,19 @@ class PersonaRetrievalPureTests(unittest.TestCase):
 
 
 class TestRagebait(unittest.TestCase):
-    """The command is prompt-driven by design: no rule engine to test, so
-    these cover the plumbing (retrieval shape, prompt contents, cosmetics)."""
+    """Test retrieval shape, prompt contents and output formatting."""
 
     LOGS = [
-        "--- 2025-04-14 ---\nsomeone: whats up\n>> Bob: tekken is "
-        "objectively better than street fighter\nother: lol no",
+        "someone: whats up\nBob: tekken is "
+        "objectively better than street fighter\nsomeone: lol no",
     ]
 
     def test_prompt_carries_the_logs_and_topic(self):
         from utils import ragebait
         prompt = ragebait.prompt_for("Bob", self.LOGS, topic="tekken")
         self.assertIn("tekken is objectively better", prompt)
-        self.assertIn(">> Bob:", prompt)
+        self.assertIn("Bob: tekken", prompt)
+        self.assertIn("labeled Bob; other speakers are labeled someone", prompt)
         self.assertIn("bait about: tekken", prompt)
         self.assertIn("@Bob", prompt)
         # guidance, not enforcement: the taste notes live in the prompt

@@ -7,9 +7,9 @@ logs-root is Chatterino's per-channel log directory, e.g.
 files named <channel>-YYYY-MM-DD.log). It can also be set once as
 archive.chatterino_logs in config.toml and omitted here.
 
-Safe to re-run any time: files already ingested (same mtime) are skipped, and
-a file that grew since last run (today's live log) has its day re-imported
-cleanly. See docs/CHAT_ARCHIVE.md for the format spec this parser implements.
+Files with unchanged mtimes are skipped. Changed files are reimported,
+replacing their previously stored rows. See docs/CHAT_ARCHIVE.md for the format
+spec this parser implements.
 """
 
 import argparse

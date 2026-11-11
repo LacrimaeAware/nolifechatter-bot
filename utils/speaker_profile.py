@@ -6,7 +6,7 @@ percentages), they're a "known speaker" of it, and the bot will translate even
 their short messages in that language.
 
 Profiles are keyed by Twitch user id (same as user_settings) and are global
-across channels - a person's language doesn't change per channel.
+across channels.
 
 Stored in the `user_languages` table (see tools/setup/init_db.py).
 """
@@ -64,16 +64,15 @@ def known_speaker(profile: dict, lang: str, min_count: int | None = None) -> boo
 
 
 def known_languages(user_id) -> set:
-    """Languages this user is an established speaker of (flagged via ~speak, or
-    written confidently >= SPEAKER_MIN_COUNT LONG sentences). Used by the
-    translate gate's short-message concession."""
+    """Languages passing the configured observation-count threshold or manual
+    flag. Used by the translation gate for short messages."""
     profile = get_profile(user_id)
     return {lang for lang in profile if known_speaker(profile, lang)}
 
 
 def is_massive_speaker(user_id, lang: str) -> bool:
-    """A heavy, established speaker (>= SPEAKER_MASSIVE_COUNT long foreign
-    sentences) - the only tier that unlocks SINGLE-WORD auto-translation."""
+    """Whether a language has a manual flag or at least SPEAKER_MASSIVE_COUNT
+    recorded observations. Used by the single-word translation gate."""
     entry = get_profile(user_id).get((lang or "").upper())
     if not entry:
         return False

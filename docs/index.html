@@ -3,206 +3,79 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="NoLifeChatter is a modular Twitch bot for live translation, local chat archives, persona experiments, and stylometry.">
+  <meta name="description" content="A Twitch translation bot with language practice, chat-history tools, local-model personas and embedding analysis.">
   <title>NoLifeChatter</title>
   <link rel="stylesheet" href="assets/pages.css">
 </head>
 <body>
-  <header class="site-header" aria-label="Primary">
-    <a class="brand" href="#top" aria-label="NoLifeChatter home">
-      <span class="brand-mark" aria-hidden="true">NLC</span>
-      <span>NoLifeChatter</span>
-    </a>
-    <nav class="nav-links" aria-label="Project links">
-      <a href="#archive-map">Map</a>
-      <a href="#examples">Examples</a>
-      <a href="COMMANDS.html">Commands</a>
-      <a href="SETUP.html">Setup</a>
-      <a href="ARCHITECTURE.html">Architecture</a>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-header wrap">
+    <a class="brand" href="./">NoLifeChatter</a>
+    <nav aria-label="Project">
+      <a href="#personas">Personas</a>
+      <a href="#embeddings">Embeddings</a>
+      <a href="docs/COMMANDS.html">Commands</a>
+      <a href="docs/SETUP.html">Setup</a>
     </nav>
   </header>
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="title">
+      <div>
+        <h1 id="title">NoLifeChatter</h1>
+        <p class="hero-copy">A Twitch bot for translation, language practice and replies in a chosen chatter's style.</p>
+        <p class="hero-detail">Persona replies use retrieved messages from the chosen chatter and the current conversation.</p>
+        <div class="hero-actions"><a href="examples/README.html#preview-the-messages-selected-for-a-model-reply">Example walkthrough</a><a href="docs/SETUP.html">Run the bot</a></div>
+      </div>
+      <figure class="chat-example">
+        <figcaption>Messages retrieved for a persona reply</figcaption>
+        <p class="chat-command"><code>~persona chatter_01 sourdough</code></p>
+        <div class="chat-message"><h3>Related conversation</h3><p><span>chatter_03:</span> what are we baking today</p><p><strong>chatter_01: sourdough starter day three and it finally has bubbles</strong></p><p><span>chatter_02:</span> bubbles pog</p></div>
+        <div class="chat-message"><h3>Writing examples</h3><p>crumb reveal time breadChamp</p><p>eleven resets and one loaf, balanced day</p></div>
+        <p class="sample-note">Fictional chat logs.</p>
+      </figure>
+    </section>
 
-  <main id="top">
-    <section class="hero" aria-labelledby="hero-title">
-      <canvas id="hero-network" class="hero-canvas" aria-label="Animated chat network"></canvas>
-      <div class="hero-shade" aria-hidden="true"></div>
-      <div class="hero-content">
-        <p class="eyebrow">Local archive. Live chat. Persona lab.</p>
-        <h1 id="hero-title">NoLifeChatter</h1>
-        <p class="hero-copy">
-          A modular Twitch bot that translates live messages, searches a local
-          SQLite chat archive, and experiments with Markov, retrieval, LoRA, and
-          embedding-based persona tools.
-        </p>
-        <div class="hero-actions" aria-label="Quick links">
-          <a class="text-link" href="#pipeline">See the pipeline</a>
-          <a class="text-link" href="COMMANDS.html">Command reference</a>
-          <a class="text-link" href="SETUP.html">Run it yourself</a>
-        </div>
+    <section class="persona-section wrap" id="personas" aria-labelledby="persona-title">
+      <div><h2 id="persona-title">Model personas</h2><p>The bot checks for copied lines and ranks candidates for relevance and style.</p><p><a href="docs/GENERATE_AND_BOT_MODES.html">Generation and channel modes</a> · <a href="docs/FINE_TUNING.html">Optional LoRA training</a></p></div>
+      <dl class="command-examples"><div><dt><code>~persona chatter_01 sourdough</code></dt><dd>Generate one reply using this chatter's history.</dd></div><div><dt><code>~generate chatter_01 chatter_02 optimist topic=speedruns</code></dt><dd>Combine writing examples from two chatters with a trait and topic.</dd></div><div><dt><code>~botpersona chatter_01 mode=response</code></dt><dd>Keep a persona active and reply when the bot is mentioned.</dd></div></dl>
+    </section>
+
+    <section class="analysis-section wrap" id="embeddings" aria-labelledby="embedding-title">
+      <h2 id="embedding-title">Embeddings and chat analysis</h2>
+      <p class="section-intro">Message embeddings represent passages numerically. The bot can retrieve related passages by vector similarity as well as keyword matches.</p>
+      <dl class="analysis-commands"><div><dt><code>~askchat user=chatter_01 sourdough</code></dt><dd>Answer questions from this chatter's saved messages. Raw mode returns the matching messages.</dd></div></dl>
+      <p class="section-detail"><a href="docs/ARCHITECTURE.html#b3-analysis-readouts">Indexes and analysis commands</a> · <a href="docs/COMMANDS.html#chat-analysis">Command reference</a></p>
+    </section>
+
+    <section class="archive-section" id="archive" aria-labelledby="archive-title">
+      <div class="wrap">
+        <div class="section-heading"><h2 id="archive-title">Chat archive</h2><p>Save chat messages or import Chatterino logs. Search the sample below, or use <code>~said</code> in chat.</p></div>
+        <form id="archive-search" class="search-form" role="search">
+          <label>Phrase<input id="phrase" name="phrase" value="sourdough starter" type="search" placeholder="Try boat skip or warm" autocomplete="off"></label>
+          <label>Author<select id="author" name="author"><option value="">Everyone</option><option value="chatter_01" selected>chatter_01</option><option value="chatter_02">chatter_02</option><option value="chatter_03">chatter_03</option><option value="chatter_04">chatter_04</option><option value="chatter_05">chatter_05</option><option value="chatter_06">chatter_06</option><option value="examplebot">examplebot</option></select></label>
+          <button type="submit">Search</button>
+        </form>
+        <p class="results-status" id="results-status" role="status">Loading the sample archive…</p>
+        <ol id="search-results" class="search-results"></ol>
+        <noscript><p>Enable JavaScript for the sample search, or read the <a href="examples/README.html">worked example</a>.</p></noscript>
+        <a class="archive-more" href="examples/README.html">Read the command walkthrough</a>
       </div>
     </section>
 
-    <section class="metric-band" aria-label="Project snapshot">
-      <div class="metric-grid">
-        <div>
-          <span class="metric-value">local</span>
-          <span class="metric-label">archive search and persona context</span>
-        </div>
-        <div>
-          <span class="metric-value">retrieval</span>
-          <span class="metric-label">topic matches, recent context, voice exemplars</span>
-        </div>
-        <div>
-          <span class="metric-value">modular</span>
-          <span class="metric-label">commands, services, utilities, tools</span>
-        </div>
-        <div>
-          <span class="metric-value">offline</span>
-          <span class="metric-label">optional RAG, embeddings, and LoRA pipeline</span>
-        </div>
+    <section class="capabilities wrap" aria-label="Translation">
+      <div class="capability-copy">
+        <article><h2>Translation</h2><p>Translate chat through DeepL or Google Cloud. Practice mode whispers translations of your native-language messages into study languages. It translates your study-language messages into your native language in chat. Japanese, Korean and Thai can also be romanized.</p></article>
+        <div class="translation-command"><code>~practice on es,ja en</code><p>Practise Spanish and Japanese with English as your native language.</p><p><a href="docs/COMMANDS.html">All commands</a> · <a href="examples/README.html">Offline examples</a></p></div>
       </div>
     </section>
 
-    <section class="section" id="pipeline">
-      <div class="section-intro">
-        <p class="eyebrow">Runtime shape</p>
-        <h2>From one chat line to one careful reply</h2>
-        <p>
-          A single local archive feeds search, retrieval, stylometry, and persona
-          context. The generation layer can point at LM Studio or any
-          OpenAI-compatible endpoint.
-        </p>
-      </div>
-
-      <div class="feature-grid">
-        <article class="feature-card">
-          <span class="feature-kicker">1</span>
-          <h3>Capture</h3>
-          <p>Live messages and imported history are normalized into SQLite and FTS5.</p>
-        </article>
-        <article class="feature-card">
-          <span class="feature-kicker">2</span>
-          <h3>Retrieve</h3>
-          <p>Search, regex, quotes, recent context, and persona exemplars come from the same archive.</p>
-        </article>
-        <article class="feature-card">
-          <span class="feature-kicker">3</span>
-          <h3>Generate</h3>
-          <p>Markov, local LLM, exaggerated personas, and LoRA tests can be compared side by side.</p>
-        </article>
-        <article class="feature-card">
-          <span class="feature-kicker">4</span>
-          <h3>Gate</h3>
-          <p>Responses pass through posting controls before they reach chat.</p>
-        </article>
-      </div>
-    </section>
-
-    <section class="section visual-section" id="archive-map">
-      <div class="section-intro">
-        <p class="eyebrow">Voice map</p>
-        <h2>A graph of nearby voices</h2>
-        <p>
-          The archive can be explored as a set of clusters: nearby voices, active
-          posters, recurring topics, and strange edges worth inspecting.
-        </p>
-      </div>
-
-      <div class="visual-grid">
-        <figure class="canvas-panel">
-          <canvas id="cluster-map" width="960" height="640" aria-label="Persona network graph"></canvas>
-          <figcaption>
-            Node size hints at activity. Edge strength hints at shared topics,
-            markers, or embedding similarity.
-          </figcaption>
-        </figure>
-
-        <div class="legend-panel" aria-label="Network legend">
-          <h3>What the map can answer</h3>
-          <ul>
-            <li>Which chatters cluster by language, topics, or posting rhythm?</li>
-            <li>Which accounts look unusually close after removing common phrases?</li>
-            <li>Which persona needs more history before it stops sounding generic?</li>
-            <li>Which retrieval examples are steering a generation?</li>
-          </ul>
-          <div class="legend-list" aria-hidden="true">
-            <span><i class="dot dot-teal"></i>voice cluster</span>
-            <span><i class="dot dot-gold"></i>high activity</span>
-            <span><i class="dot dot-coral"></i>edge case</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section chart-section">
-      <div class="section-intro">
-        <p class="eyebrow">Control dials</p>
-        <h2>The interesting part is probability</h2>
-        <p>
-          A good bot should not answer everything. It needs confidence thresholds,
-          retrieval scores, randomness, and posting limits that can be tuned
-          without rewriting the command layer.
-        </p>
-      </div>
-
-      <div class="bar-chart" role="img" aria-label="Representative probability controls">
-        <div class="bar-row">
-          <span>Directed command</span>
-          <i style="--bar: 100%; --tone: #2f7f76"></i>
-          <strong>always</strong>
-        </div>
-        <div class="bar-row">
-          <span>Retrieval confidence</span>
-          <i style="--bar: 74%; --tone: #c29224"></i>
-          <strong>high</strong>
-        </div>
-        <div class="bar-row">
-          <span>Voice distinctiveness</span>
-          <i style="--bar: 63%; --tone: #b95c50"></i>
-          <strong>varies</strong>
-        </div>
-        <div class="bar-row">
-          <span>Ambient reply chance</span>
-          <i style="--bar: 10%; --tone: #4764a8"></i>
-          <strong>rare</strong>
-        </div>
-        <div class="bar-row">
-          <span>Follow-up burst cap</span>
-          <i style="--bar: 32%; --tone: #6d5a9f"></i>
-          <strong>capped</strong>
-        </div>
-      </div>
-    </section>
-
-    <section class="section examples-section" id="examples">
-      <div class="section-intro">
-        <p class="eyebrow">Command examples</p>
-        <h2>Archive tools in motion</h2>
-        <p>
-          Search, persona, and similarity commands share the same archive, so a
-          small chat prompt can branch into quotes, context, or voice comparisons.
-          See the command reference for live syntax.
-        </p>
-      </div>
-
-      <div class="terminal-grid">
-        <pre><code>user_07: ~said chatter_12 "try it"
-bot: chatter_12 said that 14 times - first in 2025.</code></pre>
-        <pre><code>user_03: ~persona chatter_04 thoughts on this patch?
-bot: [persona] chatter_04: it works but the vibes are suspicious</code></pre>
-        <pre><code>user_11: ~vibes chatter_19
-bot: closest voices: chatter_06, chatter_22, chatter_31</code></pre>
-        <pre><code>user_02: ~regex anyone "\\bseason [0-9]+\\b"
-bot: found matches across the local archive.</code></pre>
-      </div>
+    <section class="run-section wrap" aria-labelledby="run-title">
+      <div><h2 id="run-title">Offline example</h2><p>Python 3.12 or newer. No Twitch connection or model server required.</p><p><a href="docs/SETUP.html">Bot setup</a> · <a href="docs/COMMANDS.html">Command reference</a> · <a href="docs/ARCHITECTURE.html">Code structure</a></p></div>
+      <pre><code>python tools/archive/ingest_chatterino.py examples/sample-logs
+python tools/archive/persona_rag_preview.py chatter_01 sourdough --seed 7</code></pre>
     </section>
   </main>
-
-  <footer class="site-footer">
-    <span>NoLifeChatter</span>
-    <span>Local-first Twitch bot experiments</span>
-  </footer>
-
-  <script src="assets/pages.js"></script>
+  <footer class="site-footer wrap"><span>NoLifeChatter</span><div><a href="PROVENANCE.html">Project notes</a><a href="docs/RESEARCH_QUESTIONS.html">Experiment questions</a></div></footer>
+  <script src="assets/pages.js" defer></script>
 </body>
 </html>

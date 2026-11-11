@@ -1,13 +1,7 @@
-"""~ragebait: hand the model real conversation logs and let it write the bait.
+"""Generate a roast from repeated-term counts or retrieved archive excerpts.
 
-Design (user directive, after several over-engineered iterations): no
-hard-coded rules, no stat miners, no regex guards deciding what is funny.
-Retrieve real logs - keyword + embedding retrieval over the home chats,
-expanded into the surrounding conversation - put them in one good prompt with
-guidance the model can weigh, and let it compose. Everything that used to be
-enforced in code (be specific, don't invent quotes or numbers, punchline
-last, make it standalone) is now stated in the prompt as considerations.
-"""
+Without a topic, try term-frequency candidates first. Otherwise retrieve
+keyword/embedding hits and surrounding messages from configured home channels."""
 
 import logging
 import random
@@ -24,9 +18,7 @@ MAX_LEN = 450          # Twitch's own limit is 500; this is a safety cap only
 
 
 def home_channels():
-    """The conversational chats - big stream chats are emote spam with no
-    reconstructable conversation. [comedy] channels is already defined as
-    exactly this; [analysis] is the same community."""
+    """Return comedy channels, falling back to analysis channels."""
     import config
     return (getattr(config, "COMEDY_CHANNELS", None)
             or getattr(config, "ANALYSIS_CHANNELS", None) or [])
@@ -35,14 +27,9 @@ def home_channels():
 # ------------------------------- retrieval --------------------------------
 
 def _window(msg_id, channel, canon, display):
-    """One archive hit expanded into the conversation around it.
+    """Format neighboring messages with the target named and others labeled someone.
 
-    Only the target is named. Everyone else is 'someone' - with real
-    usernames on every line the model lost track of who was who and produced
-    things like roasting a person for being roasted by themselves. Anonymous
-    others also stop other chatters' opinions being read as the target's.
-    Returns (text, their_line_count) or None.
-    """
+    Return (text, target_line_count) when minimum coverage checks pass, else None."""
     try:
         rows = chat_archive.context_window(
             msg_id, channel, before=WINDOW_BEFORE, after=WINDOW_AFTER,
@@ -127,25 +114,19 @@ def moments(canon, display, topic=None, n=MOMENTS):
 # -------------------------------- prompt ----------------------------------
 
 def obsession_prompt(display, found):
-    """The reliable path: measured facts about what they won't shut up about.
-
-    The miner supplies candidates with hard counts; the model's only jobs are
-    picking which candidates are real SUBJECTS (it knows 'slayer' is a game
-    thing and 'tihnk' is a typo - that is word-level semantics, which a small
-    model is fine at) and phrasing the jab. It is never asked to find
-    something funny in raw chat, which is the judgment it kept failing."""
+    """Build a roast prompt from repeated terms, counts, days, ratios and examples."""
     lines = []
     for i, o in enumerate(found, 1):
         ex = " | ".join(f'"{e}"' for e in o["examples"][:3])
         lines.append(
             f'{i}. "{o["term"]}" - in {o["count"]} of their messages across '
-            f'{o["days"]} different days, about {o["ratio"]:g}x more than '
-            f'anyone else in the chat.\n   they say things like: {ex}')
+            f'{o["days"]} different days, about {o["ratio"]:g}x the '
+            f'configured corpus-average per-message frequency.\n   they say things like: {ex}')
     return (
         "You're in a Twitch chat where close friends roast each other "
         f"constantly. Write ONE message winding up @{display}.\n\n"
-        f"These are the things @{display} says far more than anyone else, "
-        "measured over their whole chat history:\n\n" + "\n".join(lines) + "\n\n"
+        f"These terms occur more often in @{display}'s sampled archive messages "
+        "than in the configured corpus overall:\n\n" + "\n".join(lines) + "\n\n"
         "Pick the ONE that's a real subject they're obsessed with - a game, "
         "a person, a hobby, a thing they clearly care about - and that you "
         "actually understand. If a word is just a typo or filler, or you "
@@ -177,8 +158,8 @@ def prompt_for(display, logs, topic=None):
     return (
         "You're in a Twitch chat where close friends roast each other "
         f"constantly. Write ONE message winding up @{display}.\n\n"
-        f"Here are real logs of @{display} in this chat. Their own lines are "
-        f"marked >>:\n\n" + "\n\n".join(logs) + "\n"
+        f"Here are archive excerpts of @{display} in this chat. Their own lines "
+        f"are labeled {display}; other speakers are labeled someone:\n\n" + "\n\n".join(logs) + "\n"
         f"{topic_line}\n"
         "Read the logs and find the thing worth mocking - an argument they "
         "lost, a take nobody agreed with, something they won't shut up about, "
@@ -237,9 +218,7 @@ async def generate(user, channel=None, topic=None) -> str:
     display = chat_archive.display_name(canon)
     topic = " ".join((topic or "").split()) or None
 
-    # Two retrieval paths. No topic -> measured obsessions, which work for
-    # every chatter and need no surrounding conversation to make sense. With
-    # a topic -> the conversation where they actually discussed it.
+    # Without a topic, try repeated-term candidates before archive excerpts.
     logs, source = [], "obsession"
     if not topic:
         from utils import obsessions

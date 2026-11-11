@@ -1,14 +1,7 @@
-"""Behavioral (structural) personality profile - HOW a chatter types.
+"""Roster-relative text features for the ~style command.
 
-This is the half of personality that IS measurable from data (see
-docs/PERSONALITY_SYSTEM_DESIGN.md): topic-free, intent-free counts like emote
-rate, verbosity, caps, @mentions, profanity, vocabulary richness. Each chatter's
-features are z-scored against the roster, so a profile is "what stands out about
-how this person types." Used by the ~style command.
-
-Intent/disposition traits (irony, hostility, sincerity) are deliberately NOT
-here - surface counts cannot recover them.
-"""
+Count message length, capitalization, mentions, vocabulary, emote matches and
+other text patterns, then z-score each feature against the roster."""
 
 from __future__ import annotations
 
@@ -53,7 +46,7 @@ def _is_emote(tok):
     sentence-initial capitalized words ('Pain is temporary' counts 'Pain'), and
     all-caps emotes (KEKW/OMEGALUL) are dropped to avoid flagging SHOUTING. Could
     be improved with per-channel active-emote sets and token position. Treat the
-    rate as a good approximation / lower bound, not exact."""
+    rate as an estimate."""
     t = tok.strip(",.!?:;\"'")
     if t.startswith("@") or len(t) < 2:   # @mentions are not emotes (don't double-count)
         return False
@@ -78,11 +71,11 @@ LABELS = {
     "caps":     ("lots of CAPS", "all-lowercase"),
     "emote":    ("emote-heavy", "low on emotes (vs this chat)"),
     "exclaim":  ("exclamation-heavy", None),
-    "question": ("asks lots of questions", None),
+    "question": ("frequent trailing question marks", None),
     "mention":  ("@s people directly", "posts to the room"),
-    "laugh":    ("laughs a lot", None),
+    "laugh":    ("frequent laugh tokens", None),
     "profan":   ("swears a lot", "barely swears"),
-    "vocab":    ("rich vocabulary", "simple vocabulary"),
+    "vocab":    ("higher unique-word ratio", "lower unique-word ratio"),
 }
 
 _PROFILES = None   # {author: feature dict}

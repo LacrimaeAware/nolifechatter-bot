@@ -9,10 +9,8 @@ description = (
     "vs the room. ⚡ = spans both poles."
 )
 
-# Flag an axis as performative only when the person BOTH occupies both poles
-# (contradiction z above this) AND actually leans there (|σ| above MIN_LEAN)
-# caveating a near-zero lean is noise. See tools/research/contradiction.py and
-# docs/GROUND_TRUTH.md known limitations.
+# Flag an axis when message projections span both poles and the mean lean
+# exceeds MIN_LEAN_FOR_FLAG.
 CONTRA_FLAG_Z = 1.0
 MIN_LEAN_FOR_FLAG = 0.5
 
@@ -50,7 +48,7 @@ async def handle_traits(bot, message, params):
         return
     # all five axes, strongest deviation first; the label names the pole they
     # lean toward, σ = standard deviations from the roster average. ⚡ flags an
-    # axis where they occupy BOTH poles, so the lean is a mean-pool artifact.
+    # axis whose message projections span both poles above the thresholds below.
     parts = []
     for axis, z, contra in traits:
         neg, pos = AXES[axis][0], AXES[axis][1]

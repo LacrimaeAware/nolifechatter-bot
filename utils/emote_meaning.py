@@ -70,13 +70,8 @@ def _center(d):
 
 
 def _centered_space():
-    """Blended emote-MEANING space: usage-context (0.45) + cleaned 7TV tags
-    (0.55), each centered (raw chat embeddings are anisotropic). Usage alone
-    confounds STIMULUS with STANCE (KEKW and SEETHE react to the same
-    situations); tags carry the stance for ~1700 emotes and pull the whole
-    geometry apart, which even fixes untagged emotes' neighborhoods. Raw
-    emote-NAME embeddings are deliberately excluded (string-similarity
-    pollution: KEKW->KEKWait, DansGame->'Dance')."""
+    """Blend centered usage-context vectors (0.45) and tag vectors (0.55).
+    Omit raw emote-name embeddings from this space."""
     global _centered, _names
     if _centered is None:
         import numpy as np
@@ -103,7 +98,7 @@ def _centered_space():
 
 
 def vector(token):
-    """Centered usage vector for an emote (case-insensitive), or None."""
+    """Blended usage/tag vector for an emote (case-insensitive), or None."""
     c = _centered_space()
     if token in c:
         return c[token]
@@ -144,7 +139,7 @@ def lookup(token):
 
 
 def nearest_emotes(token, n=6):
-    """Emotes whose usage-context is closest (same meaning by usage), or []."""
+    """Emotes with the nearest blended usage/tag vectors, or []."""
     v = vector(token)
     if v is None:
         return []
@@ -156,8 +151,7 @@ def nearest_emotes(token, n=6):
 
 
 def meaning_tags(token, n=6):
-    """Plain-meaning words for an emote: the 7TV tags of its nearest-usage
-    emotes (more reliable than cross-space probe words)."""
+    """Aggregate registry tags from nearby emote vectors."""
     from collections import Counter
     reg = registry()
     c = Counter()

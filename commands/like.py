@@ -7,7 +7,7 @@ from utils import chat_archive
 description = (
     "Who shares a chatter's distinctive voice - scored on signature vocabulary, "
     "shows WHICH markers they share. Defaults to THIS chat's logs; chat=all "
-    "compares their full history (best for alt-hunting), year=<YYYY> scopes "
+    "compares their full history, year=<YYYY> scopes "
     "to a year.\n"
     "  ~like <user> [chat=all|<channel>] [year=2023]"
 )

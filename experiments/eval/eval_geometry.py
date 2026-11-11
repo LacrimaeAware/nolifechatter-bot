@@ -1,43 +1,14 @@
-"""Geometry dial for the persona/embedding stack - the falsifiability harness.
+"""Diagnostics for stored person vectors and embedded trait-axis directions.
 
-Everything downstream (person similarity, trait axes, retrieval) reads cosine
-geometry off a FROZEN BGE-M3 manifold. That manifold is anisotropic (a few
-high-variance directions dominate every cosine) and the trait axes are constant
-mean-difference steering vectors on it. Before changing any of that we need a
-NUMBER that moves, otherwise "the embeddings feel mushy" stays a feeling.
+Compare raw, centered and top-principal-component-removed vectors using
+off-diagonal cosines and singular-value energy shares. Report pairwise axis
+cosines, axis energy outside the removed subspace, score correlations and
+nearest neighbors. These are geometric measurements of the saved artifacts.
 
-This script computes three deterministic diagnostics from artifacts already on
-disk (no bot, no rebuild - only the embedder for the axis section):
+Component removal follows Mu and Viswanath, "All But The Top" (ICLR 2018).
+Axis vectors use the configured embedding endpoint and are cached on disk.
 
-  1. ANISOTROPY of the person-vector matrix under three post-processings:
-       raw            -> the embeddings as stored
-       centered       -> current production (_centered(): subtract roster mean)
-       abtt-k         -> centered THEN remove top-k principal components
-                         (Mu & Viswanath, "All But The Top", ICLR 2018)
-     Reported as mean off-diagonal cosine (signed + |.|) and the share of total
-     variance held by the top-1 / top-5 singular directions. Lower |cos| and a
-     flatter spectrum = more usable geometry.
-
-  2. AXIS COLLINEARITY: the pairwise cosine matrix of the five trait axes
-     (menace/ironic/unhinged/professor/doomer). If two "different" axes sit at
-     cosine ~0.9 they are measuring one thing. This is the steering-vector
-     pathology the owner's structured-transform-discovery repo documented
-     (Exp 23-26: a constant mean-difference direction is a poor operator on a
-     frozen encoder). Needs the embedder; cached to data/unsynced/eval/.
-
-  3. ABTT SAFETY GUARD: how much of each axis direction lives inside the top-k
-     person-space principal subspace that ABTT removes. If an axis is nearly
-     orthogonal to the removed subspace (retained energy ~1.0), ABTT cannot
-     blunt it. This is the "axis separability must not regress" check.
-
-Plus a qualitative neighbor dump (top-3 semantic neighbors per author) under
-centered vs abtt so a human can eyeball whether the generic-chatter direction
-stopped dominating.
-
-    python experiments/eval/eval_geometry.py [--k 1] [--no-axes] [--neighbors 8]
-
-Deterministic: no RNG, no network except the cached axis embeddings.
-"""
+    python experiments/eval/eval_geometry.py [--k 1] [--no-axes] [--neighbors 8]"""
 
 import argparse
 import json
@@ -60,7 +31,7 @@ AXIS_CACHE = os.path.join("data", "unsynced", "eval", "axis_vecs_cache.json")
 # ---------------------------------------------------------------- loading -----
 
 def load_person_matrix():
-    """(names, M[N,1024] float64 L2-normalized) from the production pickle."""
+    """Return names, an L2-normalized float64 matrix M[N,d], and the stored model id."""
     with open(EMB_PATH, "rb") as fh:
         data = pickle.load(fh)
     vectors = data["vectors"]
@@ -79,8 +50,9 @@ def center(M):
 
 
 def abtt(M, k):
-    """Center, then project out the top-k principal components, then renorm.
-    Returns (transformed_matrix, removed_PCs[k,1024]). k=0 is plain centering."""
+    """Center, remove the top-k principal components, and renormalize rows.
+
+    Return (transformed_matrix, removed_PCs[k,d]); k=0 is centering only."""
     C = M - M.mean(axis=0)
     if k > 0:
         # principal directions of the centered cloud (rows are observations)
@@ -123,9 +95,7 @@ def _embed(texts):
 
 
 def axis_vectors(use_cache=True):
-    """{axis: unit 1024-vec} for the five built-in axes, embedded via the live
-    endpoint and cached so reruns are free. Mirrors persona_traits._axis_vectors
-    exactly (mean(pos) - mean(neg), normalized)."""
+    """Embed built-in positive/negative examples and cache normalized mean differences."""
     if use_cache and os.path.exists(AXIS_CACHE):
         cached = json.load(open(AXIS_CACHE, encoding="utf-8"))
         if cached.get("model") == config.LLM_EMBED_MODEL and \
@@ -159,8 +129,7 @@ def axis_collinearity(axes):
 
 
 def axis_energy_retained(axes, removed_pcs):
-    """For each axis a, 1 - ||proj of a onto removed subspace||^2. ~1.0 means
-    ABTT does not touch what the axis reads; low means ABTT would blunt it."""
+    """For each unit axis a, return 1 minus its squared projection onto removed PCs."""
     out = {}
     for a, v in axes.items():
         if removed_pcs.shape[0] == 0:
@@ -174,9 +143,7 @@ def axis_energy_retained(axes, removed_pcs):
 # --------------------------------------------------------------- report -------
 
 def lowdin(A):
-    """Symmetric (order-independent) orthogonalization of axis rows A[m,d]:
-    A_orth = (A A^T)^{-1/2} A. Decorrelates the axes without privileging any
-    one (unlike Gram-Schmidt, whose result depends on input order)."""
+    """Symmetric orthogonalization of axis rows: (A A^T)^(-1/2) A."""
     G = A @ A.T
     w, U = np.linalg.eigh(G)
     w = np.clip(w, 1e-9, None)
@@ -187,9 +154,7 @@ def lowdin(A):
 
 
 def gram_schmidt(A):
-    """Order-dependent orthogonalization (what persona_axes._ortho_builtin does
-    today): each row is stripped of all earlier rows' components, in input
-    order. Included only to measure what the production ~top path already gets."""
+    """Orthogonalize rows in input order by removing earlier-row components."""
     basis = []
     out = []
     for v in A:
@@ -205,13 +170,9 @@ def gram_schmidt(A):
 
 
 def axis_score_entanglement(M, axes):
-    """The thing the user EXPERIENCES as 'axes feel the same': do the per-person
-    axis z-scores correlate across the roster? Compares axis geometries:
-      current   - raw _axis_vectors (production traits_for / ~traits path)
-      gram      - Gram-Schmidt, fixed order (production axis_scores / ~top path)
-      lowdin    - symmetric-orthogonalized axes (order-independent, proposed)
-      whitened  - ZCA-whiten the score covariance directly (max decorrelation)
-    Returns {label: (names, corr_matrix, mean_abs_offdiag)} on one person space."""
+    """Compare roster score correlations for raw, Gram-Schmidt, symmetric and whitened axes.
+
+    Return {label: (names, correlation_matrix, mean_abs_off_diagonal)}."""
     anames = list(axes)
     A = np.vstack([axes[a] for a in anames])
 
@@ -269,7 +230,7 @@ def main():
     print("=== 1. ANISOTROPY (person-vector matrix) ===")
     print(f"  raw        {fmt(anisotropy(M))}")
     Cc = center(M)
-    print(f"  centered   {fmt(anisotropy(Cc))}   <- current production")
+    print(f"  centered   {fmt(anisotropy(Cc))}")
     removed_for_k = None
     for k in (1, 2, 3):
         Ck, pcs = abtt(M, k)
@@ -279,7 +240,7 @@ def main():
     print()
 
     if not args.no_axes:
-        print("=== 2. AXIS COLLINEARITY (trait axes; verifies the steering-vector pathology) ===")
+        print("=== 2. AXIS COLLINEARITY (trait-axis cosine matrix) ===")
         try:
             axes = axis_vectors()
         except Exception as e:
@@ -296,7 +257,7 @@ def main():
             print(f"  most collinear pair: {worst[0]} ~ {worst[1]} = {worst[2]:+.2f}")
             print()
 
-            print("=== 3. ABTT SAFETY GUARD (axis energy retained after removing top-"
+            print("=== 3. AXIS ENERGY RETAINED (after removing top-"
                   f"{args.k}) ===")
             retained = axis_energy_retained(axes, removed_for_k)
             for a, r in sorted(retained.items(), key=lambda kv: kv[1]):
@@ -310,12 +271,12 @@ def main():
             for label in ("current", "gram", "lowdin", "whitened"):
                 _an, _C, mean_abs = ent[label]
                 print(f"  {label:9} mean |off-diagonal| score correlation = {mean_abs:.3f}")
-            print("  current=~traits (raw)  gram=~top (Gram-Schmidt, order-dependent)  "
-                  "lowdin=proposed (order-independent)")
+            print("  current=raw axes  gram=Gram-Schmidt (order-dependent)  "
+                  "lowdin=symmetric orthogonalization")
             print()
 
-    print(f"=== 4. NEIGHBOR SANITY (centered vs abtt-{args.k}) ===")
-    print("  -- centered (current) --")
+    print(f"=== 4. NEAREST NEIGHBORS (centered vs abtt-{args.k}) ===")
+    print("  -- centered --")
     print(neighbors_table(names, Cc, n=args.neighbors))
     Ck, _ = abtt(M, args.k)
     print(f"  -- abtt-{args.k} --")

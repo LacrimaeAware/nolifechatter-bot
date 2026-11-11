@@ -54,8 +54,7 @@ def _calib(name, av):
 
 
 def _resolve_emotes(text):
-    """Replace recognized emotes with their usage-meaning words so the
-    embedder sees the operator (DansGame -> 'disgust gross')."""
+    """Append the nearest usage-meaning probe word to recognized emote tokens."""
     out = []
     for tok in text.split():
         words = emote_meaning.meaning_words(tok, n=1)

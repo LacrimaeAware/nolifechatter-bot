@@ -1,21 +1,10 @@
-"""Ground-truth emote registry with ALIASES, plus a suspect-emote oracle queue.
+"""Fetch configured-channel emote names, aliases and image URLs from 7TV, BTTV and FFZ.
 
-7TV emote-set entries carry both the in-chat alias (what people type - e.g. a
-friend's name) and the ORIGINAL emote name, plus image URLs. That triple is
-the key to 'double awareness': an aliased emote means its alias-word AND its
-image at once, and the clash between them is usually the joke.
+Write data/unsynced/emote_registry.json with origin, channel, original name and
+image fields. Emit a manual-review queue of frequent emote-shaped archive tokens
+absent from the fetched sets.
 
-Builds data/unsynced/emote_registry.json:
-    {token: {"origin": "7tv|bttv|ffz", "channel": ..., "original": ...,
-             "image": ...}}
-for the configured channels + any --channels extras. Then emits a review
-queue of SUSPECTED emotes - emote-shaped tokens common in the archive but
-absent from every known set (could be dead emotes, fake personal emotes, or
-real emotes from unfetched channels) - for the user to verify, which becomes
-training data for a learned emote detector.
-
-    python tools/build/build_emote_registry.py [--channels a,b,c] [--suspects 40]
-"""
+    python tools/build/build_emote_registry.py [--channels a,b,c] [--suspects 40]"""
 
 import argparse
 import json

@@ -1,8 +1,5 @@
 """One-time helper to fetch the bot's initial Twitch OAuth tokens.
 
-This replaces the old hosted OAuth redirect with a purely local flow, so you
-don't need a public web server just to log in.
-
 How it works:
   1. Opens the Twitch authorize page in your browser.
   2. Spins up a tiny local web server to catch the redirect with the auth code.

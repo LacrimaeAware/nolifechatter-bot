@@ -1,4 +1,4 @@
-"""Preview the LLM persona retrieval step without calling the model.
+"""Preview selected persona context without generating a reply.
 
     python tools/archive/persona_rag_preview.py <user> "topic or message"
     python tools/archive/persona_rag_preview.py <user> --channel yourchannel
@@ -6,7 +6,8 @@
 This is a local interpretability/debug tool. It prints which author keys are
 being searched, how many random signature vs. relevant examples were selected,
 and a small sample of the real lines that would be fed into the persona prompt.
-Nothing is sent to Twitch and LM Studio does not need to be running.
+Keyword retrieval runs offline. Semantic retrieval uses the configured
+embedding server when enabled. Nothing is posted to Twitch.
 """
 
 import argparse

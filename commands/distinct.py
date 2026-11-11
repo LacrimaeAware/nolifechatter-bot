@@ -4,8 +4,8 @@ from utils.chat_archive import display_name
 from utils.persona_axes import most_distinct
 
 description = (
-    "~distinct [top|bottom] [n] - chatters whose personality is furthest from "
-    "(or closest to) the room average, with the traits that define them."
+    "~distinct [top|bottom] [n] - message profiles farthest from or closest to "
+    "the room average across trait scales."
 )
 
 
@@ -30,4 +30,4 @@ async def handle_distinct(bot, message, params):
         for i, (a, total, labels) in enumerate(rows, 1)
     ]
     label = "least" if reverse else "most"
-    await message.channel.send(f"{label} distinct personalities: " + " | ".join(parts))
+    await message.channel.send(f"{label} distinct message profiles: " + " | ".join(parts))

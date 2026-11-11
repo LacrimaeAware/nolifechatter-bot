@@ -1,12 +1,7 @@
-"""Per-channel emote names (7TV + BTTV + FFZ), used to strip emotes from
-messages before language detection/translation.
+"""Cached per-channel 7TV, BTTV and FFZ emote names for preprocessing.
 
-Emotes are just words to a language detector, so a line that's mostly emotes
-(or an emote-heavy foreign line) gets misread. Stripping them first fixes that.
-
-Names are fetched once per channel (by Twitch room id) and cached. Fetching runs
-in a background thread so it never blocks the bot; until a channel's emotes have
-loaded, nothing is stripped (messages still flow normally).
+Names are fetched by Twitch room id in a background thread. The lookup
+returns an empty set until loading finishes.
 """
 
 import asyncio
@@ -90,8 +85,7 @@ def ensure_channel_emotes(room_id: str | None) -> set[str]:
 
 
 def strip_emotes(text: str, emote_names: set[str]) -> str:
-    """Remove whole-word emote tokens from text (Twitch emotes are space-
-    separated tokens, so exact token matching is correct and safe)."""
+    """Remove whitespace-separated tokens matching known emote names."""
     if not text or not emote_names:
         return text
     return " ".join(t for t in text.split() if t not in emote_names)

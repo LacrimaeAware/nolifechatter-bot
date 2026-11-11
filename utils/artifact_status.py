@@ -1,9 +1,7 @@
-"""Shared status checks for generated persona/archive artifacts.
+"""Status checks for generated persona/archive artifacts.
 
-This keeps commands from silently depending on stale pickles after aliases,
-filters, embedding models, or semantic units change. It is intentionally
-metadata-only: no raw chat lines are shown.
-"""
+Report stale metadata after aliases, filters, embedding models or semantic
+units change. Status output summarizes metadata without showing chat lines."""
 
 from __future__ import annotations
 
@@ -12,12 +10,11 @@ import pickle
 from pathlib import Path
 
 import config
-from utils import chat_archive, fact_bank, persona_iq, user_profiles
+from utils import chat_archive, fact_bank, user_profiles
 
 EXPECTED_SEMANTIC_UNIT = "utterance"
 PERSONA_EMBEDDINGS = Path("data/unsynced/persona_embeddings.pkl")
 MESSAGE_INDEX_DIR = Path("data/unsynced/msg_index")
-IQ_SCORES = Path("data/unsynced/iq_scores.pkl")
 EMOTE_SEMANTICS = Path("data/unsynced/emote_semantics.pkl")
 EMOTE_EMBEDDINGS = Path("data/unsynced/emote_embeddings.pkl")
 CUSTOM_AXES = Path("data/unsynced/custom_axes.pkl")
@@ -310,57 +307,6 @@ def _message_index_status() -> dict:
     )
 
 
-def _iq_status() -> dict:
-    path = IQ_SCORES
-    if not path.exists():
-        return _row("text-IQ cache", "missing", "missing iq_scores.pkl", "~iq")
-    try:
-        data = _load_pickle(path)
-        meta = data.get("__meta__") or {}
-        status = "ok" if meta.get("version") == persona_iq.VERSION else "warn"
-        identity_status, identity_notes = _identity_health(
-            meta.get("alias_signature"), (data.get("scores") or {}).keys()
-        )
-        if identity_status == "warn":
-            status = "warn"
-        scope_note = _scope_note(meta.get("analysis_scope_signature"))
-        if scope_note:
-            status = "warn"
-        roster_note = _roster_note((data.get("scores") or {}).keys())
-        if roster_note:
-            status = "warn"
-        detail = (
-            f"version={meta.get('version', 'legacy')}; authors={meta.get('authors', '?')}; "
-            f"built={meta.get('built_at', _mtime(path))}; "
-            f"embed={meta.get('embed_model', 'unknown')}"
-        )
-        if meta.get("version") != persona_iq.VERSION:
-            detail += f"; expected version={persona_iq.VERSION}"
-        if meta.get("utterance_version") != chat_archive.UTTERANCE_VERSION:
-            status = "warn"
-            detail += (
-                f"; utterance chunking v{meta.get('utterance_version', 0)}; "
-                f"expected v{chat_archive.UTTERANCE_VERSION}"
-            )
-        quality_failures = list(meta.get("quality_failures") or [])
-        embedding_note = str(meta.get("embedding_features", ""))
-        judge_note = str(meta.get("llm_judge", ""))
-        if embedding_note.startswith("failed:"):
-            quality_failures.append(embedding_note)
-        if meta.get("judge_requested") and not meta.get("judge_authors"):
-            quality_failures.append(judge_note or "judge produced no results")
-        if meta.get("build_quality") == "degraded" or quality_failures:
-            status = "warn"
-            detail += "; degraded build: " + "; ".join(dict.fromkeys(quality_failures))
-        if identity_notes:
-            detail += "; " + "; ".join(identity_notes)
-        if scope_note:
-            detail += "; " + scope_note
-        if roster_note:
-            detail += "; " + roster_note
-        return _row("text-IQ cache", status, detail, "~iq")
-    except Exception as exc:
-        return _row("text-IQ cache", "warn", f"could not read metadata: {exc}", "~iq")
 
 
 def _simple_pickle_status(path: Path, name: str, commands: str) -> dict:
@@ -432,7 +378,7 @@ def _emote_semantics_status() -> dict:
 def _user_profiles_status() -> dict:
     if not USER_PROFILES.exists():
         return _row(
-            "verified user profiles", "missing", "missing user_profiles.json",
+            "user-claim profiles", "missing", "missing user_profiles.json",
             "~askchat, ~persona",
         )
     try:
@@ -479,10 +425,10 @@ def _user_profiles_status() -> dict:
         )
         if notes:
             detail += "; " + "; ".join(notes)
-        return _row("verified user profiles", status, detail, "~askchat, ~persona")
+        return _row("user-claim profiles", status, detail, "~askchat, ~persona")
     except Exception as exc:
         return _row(
-            "verified user profiles", "warn", f"could not read metadata: {exc}",
+            "user-claim profiles", "warn", f"could not read metadata: {exc}",
             "~askchat, ~persona",
         )
 
@@ -516,10 +462,6 @@ def _fact_bank_status() -> dict:
     return _row("claim receipt bank", status, "; ".join(notes), "~askchat")
 
 
-def _iq_rows() -> list[dict]:
-    """The text-IQ cache row only where the ~iq command exists in this checkout."""
-    from importlib.util import find_spec
-    return [_iq_status()] if find_spec("commands.iq") is not None else []
 
 
 def status_rows() -> list[dict]:
@@ -527,7 +469,6 @@ def status_rows() -> list[dict]:
         _classifier_status(),
         _persona_embeddings_status(),
         _message_index_status(),
-        *_iq_rows(),
         _fact_bank_status(),
         _user_profiles_status(),
         _emote_semantics_status(),

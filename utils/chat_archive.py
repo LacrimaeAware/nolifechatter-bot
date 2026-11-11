@@ -1,10 +1,8 @@
-"""SQLite chat archive: historical Chatterino logs + live bot capture.
+"""SQLite archive of historical Chatterino logs and live bot messages.
 
-One database (config.ARCHIVE_DB) holds every archived chat message, with an
-FTS5 full-text index so "did user X ever say Y?" is answered instantly and
-locally - no API. See docs/CHAT_ARCHIVE.md for the design and the verified
-Chatterino log-format spec this parser implements.
-"""
+config.ARCHIVE_DB stores imported and captured messages with an FTS5 index
+for local full-text queries. See docs/CHAT_ARCHIVE.md for the schema and
+Chatterino log format."""
 
 import hashlib
 import json
@@ -636,9 +634,7 @@ _live_backlog = []
 
 
 def record_live(channel: str, author: str, content: str, sent_at: str) -> None:
-    """Append one live chat message. Never raises into the bot's message path.
-    If a bulk import holds the writer lock past the busy timeout, the row is
-    buffered and flushed on a later message instead of silently lost."""
+    """Append a live message, queuing rows for retry when the database is busy."""
     _live_backlog.append((channel, author, content, sent_at))
     try:
         conn = connect()
@@ -901,14 +897,11 @@ def _dedupe_context_rows(rows, hit_id: int | None = None):
 def context_window(message_id: int, channel: str, before: int = 2, after: int = 2,
                    within_minutes: int = 20, require_multi_author: bool = True,
                    dedupe: bool = True):
-    """The chat moment around one message: [(id, author, content), ...] in
-    order, including the message itself. Lets retrieval show what a line was
-    responding to instead of the line in isolation.
+    """Return neighboring archived messages as [(id, author, content), ...],
+    including the selected message in chronological order.
 
-    For single-speaker mirror logs, surrounding rows are only treated as
-    conversation when the same channel/time slice contains another chatter too.
-    Otherwise returning neighbors would invent context from an author-only log.
-    """
+    With require_multi_author, recognized single-speaker mirror sources return
+    only the hit unless another author appears in the channel/time window."""
     conn = connect()
     hit = conn.execute(
         "SELECT id, channel, author, content, sent_at, source, src_path "
@@ -1192,15 +1185,9 @@ def message_row_for(author: str, content: str, channels=None):
 
 
 def random_messages(author: str, n: int = 6, min_words: int = 4, channels=None):
-    """N random substantial messages by author, WITH their ids and channel, so
-    callers can pull the surrounding conversation via context_window().
+    """Return up to n random messages with IDs, timestamps and channels.
 
-    random_quote() returns text only, which forces callers to reason about a
-    line ripped out of its conversation - unintelligible for anything
-    referential ("bro they charged me instantly" - charged for what?).
-    `channels` restricts sampling to given chats: big stream chats are emote
-    spam with no conversation to reconstruct, so callers that need real
-    conversation should pass the conversational chats only."""
+    Filter by min_words and, when supplied, the channels list."""
     conn = connect()
     keys = author_keys(author)
     author_placeholders, author_params = _in_clause(keys)
@@ -1403,12 +1390,8 @@ def channel_regulars(channel: str, min_messages: int = 5000, limit: int = 20,
 
 
 def context_before(channel: str, sent_at: str, n: int = 4, within_minutes: int = 15):
-    """The up-to-n messages just before sent_at in channel (oldest first).
-
-    Reconstructs what a message was responding to - a line like "exactly" or
-    "I am black" is meaningless alone but clear with the two lines above it.
-    Bounded by a time window so it doesn't reach back into an unrelated session.
-    """
+    """Return up to n preceding messages in the channel, oldest first,
+    bounded by within_minutes."""
     conn = connect()
     # 'YYYY-MM-DD HH:MM:SS' sorts and subtracts lexically only within a day;
     # for a short window, datetime() math in SQL is exact and simple.
@@ -1438,9 +1421,8 @@ _members_cache = {}
 
 
 def channel_members(channel: str, min_messages: int = 10):
-    """Everyone with real history in a channel - its membership, regardless of
-    whether they've spoken today. (~whosaid scopes to THE CHATROOM, not to
-    whoever happened to talk in the last few minutes.) Cached per process."""
+    """Authors with at least min_messages archived messages in the channel.
+    Results are cached per process."""
     key = (normalize_channel(channel), min_messages)
     if key not in _members_cache:
         conn = connect()
@@ -1452,8 +1434,7 @@ def channel_members(channel: str, min_messages: int = 10):
 
 
 def recent_authors(channel: str, scan: int = 400, limit: int = 60):
-    """Distinct authors among the last `scan` messages of a channel - the pool
-    of people currently around to mimic for a random reaction."""
+    """Distinct authors among the last scan inserted messages in a channel."""
     conn = connect()
     rows = conn.execute(
         "SELECT DISTINCT author FROM "
@@ -1894,14 +1875,11 @@ def strip_quoted_log_prefix(text: str):
 
 def random_match(phrase: str, author: str = None, channel: str = None,
                  include_commands: bool = False, min_words: int = 3):
-    """A RANDOM archived message matching `phrase` (full-text), optionally by
-    `author` and/or in `channel`. Returns (sent_at, channel, author, content) or
-    None. Skips bot commands and prefers messages with >= min_words real words.
+    """Return a random archived full-text match, optionally scoped by author
+    and channel, as (sent_at, channel, author, content), or None. Skip bot-command
+    patterns and prefer messages with at least min_words whitespace-separated words.
 
-    ORDER BY RANDOM() sorts the whole FTS-matched set, so cost scales with the
-    phrase's frequency: a normal word is ~instant, a very common one ("the") is a
-    few hundred ms. Per-user command cooldowns guard against spam; if that proves
-    insufficient, bound the candidate pool with a capped subquery first."""
+    ORDER BY RANDOM() sorts the matched set, so cost grows with matching rows."""
     q = _fts_phrase(phrase)
     if not q:
         return None

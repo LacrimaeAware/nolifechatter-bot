@@ -1,25 +1,11 @@
-"""Slot-based, LLM-verified user profiles - profile v5.
+"""Slot-based user-claim profiles with stored evidence and model judgments.
 
-The v1 fact bank (utils/fact_bank.py) extracts regex *claims* and boosts
-confidence by repetition, so repeated slang saturates to high confidence
-("im crying" -> self_identity 0.95). This module inverts the design around a
-fixed schema of profile slots (location, age, occupation, ...) and treats
-truth as something to be EARNED per candidate:
-
-1. RETRIEVAL (recall): targeted FTS anchor phrases per slot, scoped to the
-   author's alias group. Cheap, over-generates.
-2. JUDGMENT (precision): a local LLM sees the candidate line IN CONTEXT
-   (surrounding chat) and answers: does the speaker sincerely assert this
-   about THEMSELVES? Jokes, quotes, copypasta, hypotheticals -> rejected.
-3. CORROBORATION: ordinary values need >=2 independent days; unusual values
-   need >=3 and impossible readings never auto-confirm. Single sightings stay
-   "candidate". Conflicting confirmed values become "disputed".
-
-Every stored value keeps receipts. Judged candidates are cached by message id
-so rebuilds are incremental - suitable for a dead-hours batch job.
-
-Output lives in data/unsynced/user_profiles.json (gitignored: real people).
-"""
+Slot-specific archive searches supply candidate lines and neighboring context.
+The configured chat model labels self-assertion, sincerity and plausibility.
+After normalized duplicate lines are removed, ordinary values need two distinct
+days for confirmed status; unusual values need three. Impossible readings stay
+candidates, and conflicting confirmed values become disputed. Judgments are
+cached by message id. Output: data/unsynced/user_profiles.json."""
 
 from __future__ import annotations
 
@@ -140,13 +126,7 @@ Rules:
 
 
 def _candidate_has_explicit_value(slot: str, content: str) -> bool:
-    """Cheap precision gate before paying the contextual judge.
-
-    Slot anchors are intentionally broad for recall, but lines such as "my
-    boss", "if I speak", or "25 years old" about a game do not contain a
-    self-profile value. The model prompt already requires a value in the marked
-    message, so removing these rows loses no evidence the judge should accept.
-    """
+    """Filter candidate lines with slot-specific explicit-value patterns before judgment."""
     text = message_quality.clean_text(content or "").casefold().replace("’", "'")
     if not text:
         return False
@@ -244,10 +224,9 @@ def _candidate_has_explicit_value(slot: str, content: str) -> bool:
 
 
 def _said_by_others(content: str, author: str) -> bool:
-    """Archive-grounded copypasta check: if any OTHER chatter has posted the
-    same line (normalized), it's a meme circulating in chat, not a personal
-    fact - no LLM judgment needed. Uses the first words as an FTS anchor and
-    line_match_key for the exact comparison."""
+    """Check whether another author posted the same normalized line.
+
+    Use the first words as an FTS anchor and line_match_key for exact comparison."""
     words = re.findall(r"[A-Za-z0-9']+", content or "")
     if len(words) < 5:
         return False  # too short to anchor; leave it to the judge
@@ -657,14 +636,12 @@ def _ages_compatible(a: str, b: str) -> bool:
 
 
 def _reconcile(slot: str, judged: list[dict]) -> dict | None:
-    """Group sincere assertions by value; corroboration = independent days."""
+    """Group model-labeled sincere assertions by value and distinct-day support."""
     kept = [j for j in judged
             if j and j.get("asserts") and j.get("value")
             and j.get("sincerity") == "sincere"
             and _valid_value(_norm_value(slot, j["value"]), slot=slot)]
-    # A personal running gag repeats VERBATIM across days (copypasta-of-one);
-    # a real fact gets re-stated in fresh words. Identical lines count once,
-    # so verbatim repetition alone can never reach "confirmed".
+    # Count each normalized line once before checking distinct-day thresholds.
     deduped, seen_lines = [], set()
     for j in kept:
         line_key = chat_archive.line_match_key(j.get("content") or "") or j.get("content")
@@ -697,7 +674,7 @@ def _reconcile(slot: str, judged: list[dict]) -> dict | None:
         required_days = 2 if prior == "ordinary" else 3
         return "confirmed" if days(rows) >= required_days else "candidate"
 
-    # most independent days first; ties broken by most recent assertion
+    # Most distinct days first; ties broken by most recent assertion.
     ranked = sorted(groups.items(),
                     key=lambda kv: max(r["sent_at"] for r in kv[1]), reverse=True)
     ranked.sort(key=lambda kv: -days(kv[1]))
@@ -944,7 +921,7 @@ _NUMBER_WORDS = {
 
 
 def claims_in_text(text: str) -> list[dict]:
-    """Small high-precision claim parser used by the irony evidence layer."""
+    """Parse age and relationship claims for the irony evidence layer."""
     out = []
     age = re.search(
         r"\b(?:i am|i'm|im)\s+(\d{1,3})(?:\s+years?\s+old)?\b",
@@ -1008,8 +985,7 @@ def claim_consistency(author: str, text: str) -> dict:
 
 
 def profile_line(author: str, max_len: int = 220) -> str:
-    """Compact one-line summary for prompt injection ('' when nothing known).
-    Confirmed facts only - a persona prompt must not launder guesses."""
+    """Summarize recorded claims with confirmed status ('' when none qualify)."""
     prof = profile_for(author, min_status="confirmed")
     bits = []
     for slot in SLOTS:  # stable order

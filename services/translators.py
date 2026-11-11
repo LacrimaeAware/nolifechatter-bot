@@ -1,9 +1,6 @@
-"""Translation providers.
+"""DeepL translation client using aiohttp and a per-request timeout.
 
-DeepL (free tier, header-based auth) over aiohttp so a slow or stalled
-provider delays one translation instead of the whole bot. Kept separate so a
-second provider (Google is wired in services/message_service.py) can be added
-or rotated to spread free-tier usage.
+Google Cloud fallback is handled by services/message_service.py.
 """
 
 import asyncio

@@ -187,16 +187,10 @@ def _tokens(text: str) -> list[str]:
 
 
 def _distinctiveness_models(candidates: dict, min_z: float) -> dict:
-    """Per-author {token: z} signature maps via the log-odds-ratio with an
-    informative prior (Monroe, Colaresi & Quinn 2008, "Fightin' Words"):
-    each author vs the rest of the selected group, add-0.5 smoothed, z-scored.
+    """Compute per-author token log-odds z-scores against the rest of the group.
 
-    z>0 = the author says the word more than the group average; high z is their
-    signature vocabulary/emotes/topics. A message's distinctiveness is the sum
-    of its signature tokens' z - the tail of "characteristically them" that the
-    uniform sample drowned in filler. This is the fix to "what are we
-    minimizing": train on what makes them *them*, not their average "lol".
-    """
+    Use add-0.5 smoothing; message distinctiveness sums positive signature-token
+    scores. Related reference: Monroe, Colaresi and Quinn (2008), "Fightin' Words"."""
     global_counts = Counter()
     author_counts = {}
     for persona, items in candidates.items():

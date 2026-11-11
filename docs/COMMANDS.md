@@ -1,166 +1,146 @@
-# NoLifeChatter Command Bible
+# Commands
 
-This is the public, source-of-truth command map for the live bot. Commands are
-auto-discovered from `commands/*.py`: if a file defines `handle_name`, then
-the matching prefixed chat command exists.
+Type commands in Twitch chat with the `~` prefix. The access column shows who
+can use each command; admin accounts are set in `config.toml`.
 
 For compact chat help, use `~help`, `~help <category>`, or `~help <command>`.
 Every command also accepts a lone `help` argument (`~askchat help`,
 `~mimic help`, etc.); both forms return the same command description.
-`~help ai` shows which commands can make a live local-AI/GPU call.
+`~help ai` shows which commands use a local model.
 
-## Quick Index
+## Command list
 
-### Translation And Language
+[Translation](#translation-and-languages) ·
+[Chat search](#chat-search-and-statistics) ·
+[Message generation](#message-generation) ·
+[Chat analysis](#chat-analysis) ·
+[Moderation and utilities](#moderation-and-utilities)
+
+### Translation and languages
 
 | Command | Access | What it does |
 | --- | --- | --- |
 | `~autotl` | admin | Toggle auto-translation for your own messages. |
 | `~setlang <LANG>` | admin | Set your translation target language, such as `EN` or `ES`. |
-| `~tloutput local|whisper|channel <name>` | admin | Choose where translations are sent. |
-| `~chan_autotl <channel> on|off` | super admin | Enable or disable auto-translation for one channel. |
-| `~global_autotl on|off` | super admin | Global auto-translation switch. |
-| `~notranslate <user> [undo]` | super admin | Stop auto-translating a specific user (they write slang the detector misreads); `undo` re-enables; no arg lists opted-out users. |
-| `~practice on <learn_langs_csv> [native]` | anyone | Practice mode: translate your native language into study languages and your study-language attempts back to native. |
+| `~tloutput local\|whisper\|channel <name>` | admin | Choose where translations are sent. |
+| `~chan_autotl <channel> on\|off` | super admin | Enable or disable auto-translation for one channel. |
+| `~global_autotl on\|off` | super admin | Global auto-translation switch. |
+| `~notranslate <user> [undo]` | super admin | Stop auto-translating a user. `undo` enables it again; no argument lists users whose messages are excluded. |
+| `~practice on <learn_langs_csv> [native]` | anyone | Whisper study-language translations of your native-language messages; translate study-language messages back to native in chat. |
 | `~practice off` / `~practice show` | anyone | Stop or inspect practice mode. |
-| `~romanize on|off|show` | anyone | Toggle romanized readings for supported non-Latin scripts. |
+| `~romanize on\|off\|show` | anyone | Toggle romanized readings for supported non-Latin scripts. |
 | `~speak <lang>` / `~speak <lang> off` / `~speak show` | anyone | Tell the bot which language(s) you speak so short messages are handled better. |
 
-### Archive Search And Stats
+### Chat search and statistics
 
 | Command | Access | What it does |
 | --- | --- | --- |
-| `~said <user> [chat=<channel>] [sort=] <phrase>` | anyone | Search whether a user said a phrase. Exact match first, then normalized close match. Results shuffled by default; `sort=chrono\|newest\|name` to order them. |
-| `~said anyone [chat=<channel>] [sort=] <phrase>` | anyone | Search the whole archive for a phrase. Same `sort=` flag; default is a seeded shuffle. |
-| `~saidnext` | anyone | Continue your last `~said` search for about a minute, keeping the same order (the shuffle seed is remembered). |
-| `~saidmost <phrase> [chat=<channel>] [n]` | anyone | Who has said a phrase the most - ranks chatters by how many of their messages contain it (aliases merged, bots skipped). |
-| `~regex <user|anyone> <pattern>` | anyone | Case-insensitive regex search over archived messages. |
+| `~said <user> [chat=<channel>] [sort=] <phrase>` | anyone | Search a user's messages for a phrase. Tries exact matches first, then normalized close matches. Results are shuffled by default; `sort=chrono\|newest\|name` changes the order. |
+| `~said anyone [chat=<channel>] [sort=] <phrase>` | anyone | Search everyone's messages for a phrase. Uses the same `sort=` options; the default shuffle keeps its seed for paging. |
+| `~saidnext` | anyone | Show more results from your last `~said` search, in the same order. Available for 10 minutes after the last page. |
+| `~saidmost <phrase> [chat=<channel>] [n]` | anyone | Rank chatters by the number of their messages containing a phrase. Account aliases are combined and bots are excluded. |
+| `~regex <user\|anyone> <pattern>` | anyone | Case-insensitive regex search over archived messages. |
 | `~userregex <pattern> [chat=<channel>]` | anyone | Regex-search archived usernames. |
-| `~quote <user>` | anyone | Post a random real quote from a user. |
-| `~random <word> [user=] [chat=]` | anyone | A random real quote containing a word/phrase. Anyone by default; narrow with user= and/or chat=. |
+| `~quote <user>` | anyone | Post a random saved message from a user. |
+| `~random <word> [user=] [chat=]` | anyone | Post a random saved message containing a word or phrase. Optionally limit it to a user or channel. |
 | `~firstseen <user>` | anyone | Show a user's first archived message. |
 | `~chatstats <user> [chat=<channel>]` | anyone | Show message count, first/last seen, average length, and busiest hour. |
 | `~regulars [channel] [min_messages] [limit]` | anyone | Top regulars in a channel, ignoring obvious bots by default. |
-| `~askchat [raw] [user=<name>\|<name>] [chat=<channel>] <question>` | anyone | Evidence-backed archive/lore QA. Normal mode fuses keyword/dense retrieval, adds safe chronological context, and asks the local LLM for a cautious cited answer; `raw` returns receipts only. |
+| `~askchat [raw] [user=<name>\|<name>] [chat=<channel>] <question>` | anyone | Answer a question using messages from the archive, with citations. `raw` shows the source messages without asking a model. |
 
-### Persona And Generation
+### Message generation
 
 | Command | Access | What it does |
 | --- | --- | --- |
-| `~markov <user>` | anyone | Generate a local Markov-chain line from that chatter's messages. |
-| `~mimic <user>` | anyone | Alias-style Markov persona command; same family as `~markov`. |
-| `~persona <user> [message] [model=llama|lora]` | anyone | Ask the local LLM to reply as a chatter using archive evidence and live context. |
+| `~persona [model=llama\|lora] <user> [message]` | anyone | Use a local model to reply in a chatter's style, using their saved messages and the current conversation. |
 | `~pers <user> [message]` | anyone | Alias of `~persona` (unlisted in `~help`). |
-| `~hyper <user> [message] [model=llama|lora]` | anyone | Same as `~persona`, but exaggerated for comedy. |
-| `~generate <tags...>` | anyone | Generate an example message from a recipe: users, traits, topic words, `chat=`, `year=`, `engine=markov|llm`, `model=...`. |
+| `~hyper [model=llama\|lora] <user> [message]` | anyone | Like `~persona`, with an exaggerated style for comedy. |
+| `~generate <tags...>` | anyone | Generate a message by combining users, traits and a topic. Supports `chat=`, `year=`, `engine=markov\|llm` and `model=...`. |
 | `~generate save <name> <tags...>` | anyone | Save a per-user generation recipe. |
 | `~generate <name> [more tags]` | anyone | Use a saved recipe and optionally stack more tags. |
 | `~generate list` / `~generate del <name>` | anyone | List or delete your saved recipes. |
-| `~botpersona status [chat=<channel>]` | super admin | Inspect the resident persona for a channel. |
-| `~botpersona off [chat=<channel>]` | super admin | Clear the resident persona for a channel. |
-| `~botpersona <user> [chat=<channel>] [minutes=360] [mode=regular\|response\|random\|silent] [chance=] [topic=] [curve=] [directed=] [directed_cooldown=] [idle=]` | super admin | Set a channel-scoped resident persona that can autonomously reply and idle-chat. |
-| `~botmode regular\|response\|random\|silent [minutes] [chat=<channel>]` | super admin | Change resident persona response mode and optional expiry. |
-| `~botcontext [chat=<channel>] <text\|clear>` | super admin | Set extra standing instruction for the resident persona. |
-| `~botchance <base> [directed] [chat=<channel>] [topic=] [idle=] [greeting=] [cooldown=]` | super admin | Tune resident persona reaction, topic-boost, idle, greeting, and cooldown probabilities. |
+| `~botpersona status [chat=<channel>]` | super admin | Show the active persona for a channel. |
+| `~botpersona off [chat=<channel>]` | super admin | Turn off the channel's active persona. |
+| `~botpersona <user> [chat=<channel>] [minutes=360] [mode=regular\|response\|random\|silent] [chance=] [topic=] [curve=] [directed=] [directed_cooldown=] [idle=]` | super admin | Keep a persona active in a channel so the bot can reply to chat and post occasional messages on its own. |
+| `~botmode regular\|response\|random\|silent [minutes] [chat=<channel>]` | super admin | Choose when the channel persona responds and optionally set an expiry time. |
+| `~botcontext [chat=<channel>] <text\|clear>` | super admin | Set or clear extra instructions for the channel persona. |
+| `~botchance <base> [directed] [chat=<channel>] [topic=] [idle=] [greeting=] [cooldown=]` | super admin | Adjust response chances, topic boosts, idle messages, greetings and cooldowns for the channel persona. |
+| `~markov <user>` | anyone | Generate a message from a chatter's saved word patterns using a Markov chain. No model server needed. |
+| `~mimic <user>` | anyone | Generate a Markov message from a chatter's history, like `~markov`. |
 
-Important distinction: `~persona`, `~hyper`, and `~generate` are one-shot
-commands. The resident persona commands above are channel-scoped and
-super-admin-only.
+`~persona`, `~hyper` and `~generate` produce one reply. The `~botpersona`
+commands keep a persona active in one channel and require super-admin access.
 
-Local-model-heavy commands share one global queue across channels. Commands
-such as `~persona`, `~hyper`, LLM `~generate`, dynamic `~top`/`~bottom`,
-`~axis`, uncached/`words`-mode `~why`, and `~irony` answer one at a time. The
-first cold use of built-in
-`~traits`/`~distinct` also queues while its axes load; warm and cached-axis
-variants stay fast, as do raw/receipts-only paths. `~askchat` and emote
-explainers perform their local evidence pass first; optional model synthesis
-runs only when the model lane is idle, otherwise they return the local result.
+Commands that use a local model share one queue across channels. See
+[model requests](ARCHITECTURE.md#model-requests) for which commands wait and
+which can return results without a model.
 
-### Stylometry, Similarity, Traits
+### Chat analysis
 
 | Command | Access | What it does |
 | --- | --- | --- |
 | `~whosaid <sentence>` | anyone | Guess who in the current chatroom is most likely to have said a line. |
-| `~whosaid anyone <sentence>` | anyone | Guess against the configured analysis cohort. |
-| `~markers <user> [chat=all|<channel>] [year=YYYY]` | anyone | Show distinctive words and word-pairs for a chatter. |
-| `~like <user> [chat=all|<channel>] [year=YYYY]` | anyone | Lexical/emote voice neighbors with shared-marker evidence. Useful for alt-hunting. |
-| `~vibes <user>` | anyone | Semantic embedding-space neighbors: same topics/energy even without shared catchphrases. |
-| `~twin <user>` | anyone | Overall nearest match, blending lexical and semantic similarity. |
-| `~traits <user>` | anyone | Project a chatter onto built-in trait axes relative to the room average. ⚡ marks an axis where their messages span both poles, not one side. |
-| `~style <user>` | anyone | How a chatter TYPES - standout behaviors vs the room (emote rate, verbosity, caps, @mentions, profanity, vocabulary). Data-driven "structural" personality; unlike ~traits it doesn't touch the topic embedder. |
-| `~top <trait> [n] [burst]` | anyone | Trait leaderboard. Built-in traits answer instantly; new words build dynamic axes. The trait may be more than one word (`~top anal lover`). For one person's rank, σ, and neighbours use an explicit `@user` or `user=<name>` - bare words are always read as the trait, never a username. |
-| `~bottom <trait> [n] [burst]` | anyone | Reverse leaderboard - who leans LEAST toward a trait (most toward its opposite). Trait may be multi-word. |
-| `~distinct [top\|bottom] [n]` | anyone | Chatters farthest from or closest to the room average across built-in trait axes. |
-| `~why <user> <trait> [words]` | anyone | Show real indexed messages that drive a user's score and the resolved axis basis/pole. `~why emote <emote> [raw]` explains learned emote meaning; `raw` shows vector receipts. |
-| `~axis <trait> [n]` | anyone | Inspect a trait/custom axis by showing nearest neighboring axes. |
-| `~emote <emote> [raw]` | anyone | Explain what the bot thinks an emote means in one readable sentence; `raw` shows registry, sampled usage-vector contexts, neighbors, and cached axis scores. |
-| `~explain emote <emote> [raw]` | anyone | Same emote meaning explainer, routed through the general `~explain` command. |
-| `~irony [user=<name>] [chat=here\|all] <message>` | anyone | Experimental intent read combining surface wording, community repetition, unusual literal claims, and confirmed user-history agreement/conflict. |
-| `~funny <user>` | anyone | Comedy-influence score from new laughers in the ~30s after a setup versus before it. Rapid same-author fragments are one setup; self/bot/noise reactions are excluded; cross-chat breadth counts each laugher once. |
-| `~funny top [n]` / `~funny bottom [n]` | anyone | Funniest / least-funny chatters by comedy influence across the configured chats. |
-| `~ragebait <user> [topic]` | anyone | Wind a chatter up with receipts from their own archive - a freshly LLM-composed jab built on a real conversation they took part in (home chats only) or a standing habit. Add a topic (`~ragebait bob twin primes`) to aim it at what they have said about that subject. Two-step: the model first states what actually happened, then mocks that in one sentence. Guards reject fabricated quotes and jokes that lean on context the reader cannot see. |
-| `~ragebait ref [n]` | anyone | Show what the last ragebait in this chat riffed on (`n=2` for the one before). Instant - no model call. |
+| `~whosaid anyone <sentence>` | anyone | Guess which chatter in the configured analysis group is most likely to have written a line. |
+| `~markers <user> [chat=all\|<channel>] [year=YYYY]` | anyone | Show distinctive words and word-pairs for a chatter. |
+| `~like <user> [chat=all\|<channel>] [year=YYYY]` | anyone | Find chatters with similar word and emote use, and show the shared words behind the match. |
+| `~vibes <user>` | anyone | Find chatters with similar topics and tone using message embeddings, even when they do not share catchphrases. |
+| `~twin <user>` | anyone | Find the closest match by combining word-use and message-embedding similarity. |
+| `~traits <user>` | anyone | Score a chatter's messages on built-in trait scales relative to the room average. ⚡ means their messages span both ends of a scale. |
+| `~style <user>` | anyone | Compare a chatter's emote use, message length, caps, @mentions, profanity and vocabulary with the room average. Uses writing patterns rather than topic embeddings. |
+| `~top <trait> [n] [burst]` | anyone | Rank chatters for a trait. Built-in traits use existing scales; new words create a scale. Traits can contain several words (`~top anal lover`). Use `@user` or `user=<name>` for one person's rank, σ and neighbours; bare words are read as the trait. |
+| `~bottom <trait> [n] [burst]` | anyone | Rank chatters in reverse: least toward a trait and most toward its opposite. Traits can contain several words. |
+| `~distinct [top\|bottom] [n]` | anyone | Show chatters farthest from or closest to the room average across built-in trait scales. |
+| `~why <user> <trait> [words]` | anyone | Show the indexed messages contributing to a user's trait score and which end of the scale is used. `~why emote <emote> [raw]` explains emote meaning; `raw` shows the underlying vector comparisons. |
+| `~axis <trait> [n]` | anyone | Show the nearest built-in or custom trait scales to a given trait. |
+| `~emote <emote> [raw]` | anyone | Summarize an emote's inferred meaning. `raw` shows registry information, sampled usage contexts, neighbouring emotes and cached trait scores. |
+| `~explain emote <emote> [raw]` | anyone | Another way to run `~emote` through the `~explain` command. |
+| `~irony [user=<name>] [chat=here\|all] <message>` | anyone | Estimate whether a message is ironic using its wording, repeated phrases, unusual literal claims and agreement or conflict with the user's past messages. |
+| `~funny <user>` | anyone | Score how many new people laugh in roughly 30 seconds after a message compared with before it. Rapid fragments by one author count as one setup; self, bot and noise reactions are excluded, and each laugher counts once across chats. |
+| `~funny top [n]` / `~funny bottom [n]` | anyone | Rank chatters from highest or lowest `~funny` score across the configured chats. |
+| `~ragebait <user> [topic]` | anyone | Generate a one-sentence jab about a chatter, using a conversation from their home chats or a recurring habit. A topic (`~ragebait bob twin primes`) narrows the source material. The model outlines the event before writing the joke; output checks reject invented quotes and jokes that need missing context. |
+| `~ragebait ref [n]` | anyone | Show the source for the last ragebait in this chat; `n=2` shows the one before. No model call. |
 
-The analysis commands are exploratory. They are useful for debugging and fun
-comparisons, not clinical or total-person labels.
+These commands compare patterns in archived messages. The scores depend on
+the messages and channels included.
 
-### Moderation And Utility
+### Moderation and utilities
 
 | Command | Access | What it does |
 | --- | --- | --- |
-| `~help [page\|archive\|personas\|analysis\|translation\|utility\|ai\|command]` | anyone | List grouped pages, browse one category, show local-AI use, or show one command. `~mimic`/`~markov` work but are unlisted; admin commands are listed only via `~admin`. |
-| `~admin` | anyone | List the admin / super-admin commands (kept out of the public `~help`; the commands still enforce their own permissions). |
-| `~experimental` | anyone | List prototype/evidence commands such as `~askchat`, `~emote`, `~why emote`, and `~irony`, with hints for raw receipts mode. |
-| `~ping` | anyone | Latency and host stats. |
-| `~leastused [n] [months]` | anyone | Least-used 7TV emotes in the channel, counted honestly: one use per message (spam counts once), deduped across log sources, and normalized by how long each emote has existed. `~leastused most [n]` for most used. Read-only. |
-| `~emotes add|remove|alias|prune ...` | editors / super admin | Edit the channel's 7TV emote set. `add <name|7tv-link> [as <alias>]` adds the most-used matching emote; `remove <name>`; `alias <name> <newname>` renames one; `replace <name> <new-name|link>` swaps one keeping the name. Trusted `[seventv] editors` do these one at a time (rate-limited); `prune <n> [months]` (super admin) previews the n least-used and needs `yes`. Needs a 7TV editor token in config. |
-| `~artifacts` | anyone | Compact status for generated persona artifacts and stale semantic caches. |
+| `~help [page\|archive\|personas\|analysis\|translation\|utility\|ai\|command]` | anyone | List command groups, show a group or command, or check which commands use a local model. `~mimic` and `~markov` work but are unlisted; admin commands are listed through `~admin`. |
+| `~admin` | anyone | List admin and super-admin commands. They are omitted from `~help` and require the permissions shown here. |
+| `~experimental` | anyone | List experimental commands such as `~askchat`, `~emote`, `~why emote` and `~irony`, including their `raw` options. |
+| `~ping` | anyone | Show response latency and host statistics. |
+| `~leastused [n] [months]` | anyone | Rank the channel's 7TV emotes by use. Each emote counts once per message, duplicate log entries are combined, and counts account for emote age. `~leastused most [n]` shows the most used. Does not edit the emote set. |
+| `~emotes add\|remove\|alias\|prune ...` | editors / super admin | Edit the channel's 7TV emote set. `add <name\|7tv-link> [as <alias>]` adds the most-used matching emote; `remove <name>`; `alias <name> <newname>` renames one; `replace <name> <new-name\|link>` swaps one keeping the name. Trusted `[seventv] editors` do these one at a time (rate-limited); `prune <n> [months]` (super admin) previews the n least-used and needs `yes`. Needs a 7TV editor token in config. |
+| `~artifacts` | anyone | Show which generated analysis files are missing or out of date. |
 | `~banuser <name>` | super admin | Ban a chatter from using bot commands. Translation/archive capture are unaffected. |
 | `~banuser list` | super admin | Show command-banned users. |
 | `~unbanuser <name>` | super admin | Remove a command ban. |
 | `~warnings [n]` | super admin | Review recent anti-spam cooldown offenses (the escalating cooldowns described below). |
-| `~model [status\|off\|on\|clear]` | super admin | Disable/enable every live local-AI call or inspect/clear its queue. Disabling clears pending work; a command already running finishes. `[llm] enabled = false` sets the startup default. `~modelqueue` remains an unlisted alias. |
-| `~announce [now [chat]]` | super admin | Status of the periodic promo/reminder posts, or post immediately. Channels/message/cadence come from config `[announce]`: at most `max_per_day` posts per rolling 24h, at least `min_gap_hours` apart, randomized past that and only into an active chat. An empty `channels` list disables periodic posting. |
+| `~model [status\|off\|on\|clear]` | super admin | Show or clear the local-model queue, or turn model calls on or off. Turning them off clears pending work; a running command finishes. `[llm] enabled = false` sets the startup default. `~modelqueue` is an unlisted alias. |
+| `~announce [now [chat]]` | super admin | Show the schedule for configured reminder posts, or post now. `[announce]` sets channels, message and timing: at most `max_per_day` posts in a rolling 24 hours, at least `min_gap_hours` apart, with a randomized extra wait. Posts only in active chats; an empty `channels` list disables scheduled posts. |
 | `~gojomons` | super admin | Post the project-site link (config `[announce] site_url`) in the chat it's called in. |
-| `~axismerge <canonical> <dup> [flip]` | super admin | Fold a duplicate dynamic trait axis into another (`flip` when `<dup>` is the opposite pole); `~axismerge del <axis>` deletes a junk axis outright; `~axismerge list` inspects saved axes. Dedup is manual on purpose - embedding cosine can't reliably tell synonyms from distinct concepts. |
+| `~axismerge <canonical> <dup> [flip]` | super admin | Merge duplicate trait scales (`flip` reverses the second scale). `~axismerge del <axis>` deletes a scale; `~axismerge list` shows saved scales. The admin chooses which scales to merge. |
 
-Anti-spam cooldown (`command_processor` via `utils/cooldowns.py`): using
-commands and waiting for each reply never costs anything. Sending a third
-extra command while your previous one is still running is a breach. The first
-breach gets a warning and the command is skipped. Another breach within 15
-minutes puts you on a per-user cooldown: 3 minutes the first time, doubling per
-repeat offense, capped at 15 minutes. While on cooldown your commands are
-ignored silently after one notice. Strikes are forgiven after two quiet hours.
-Every real cooldown is recorded in the settings database for `~warnings`.
+## Command limits
 
-## Resident Scope
+Sending a third extra command while your previous command is still running
+gets a warning, and that command is skipped. Another attempt within 15
+minutes starts a per-user cooldown: 3 minutes initially, doubling for repeat
+offenses up to 15 minutes. During a cooldown the bot sends one notice, then
+ignores further commands. Strikes expire after two quiet hours.
+`~warnings` shows recorded cooldowns.
 
-The current resident layer supports one real chatter persona per channel, topic
-affinity boosting from archive hits, rare idle messages, and Twitch reply-thread
-responses when a triggering message ID is available. Full `~generate` recipes
-as resident personas are still future work.
+## Channel personas
 
-## Artifact Dependencies
+One chatter persona can be active per channel. It can respond to topics found
+in that chatter's history, send occasional messages when chat is quiet, and
+reply in a Twitch thread when the triggering message has an ID. Full
+`~generate` recipes cannot yet be used as channel personas.
 
-Some commands read live SQLite tables only; others need offline artifacts:
+## Required data files
 
-| Artifact | Built by | Used by |
-| --- | --- | --- |
-| `data/unsynced/chat_archive.db` | live capture and `tools/archive/ingest_chatterino.py` | archive, stats, Markov, persona evidence |
-| `data/unsynced/persona_classifier.pkl` | `tools/build/train_classifier.py` | `~whosaid`, `~markers`, `~like`, persona eval pieces |
-| `data/unsynced/persona_embeddings.pkl` | `tools/build/build_persona_embeddings.py` | `~vibes`, `~twin`, trait averages |
-| `data/unsynced/msg_index/` | `tools/build/build_message_index.py` | `~why`, burst `~top`, semantic persona retrieval |
-| `data/unsynced/fact_bank.jsonl` | `tools/build/build_fact_bank.py` | `~askchat`, offline archive/lore QA |
-| `data/unsynced/user_profiles.json` | `tools/build/build_user_profiles.py` | confirmed persona facts, `~askchat`, irony history checks |
-| `data/unsynced/emote_semantics.pkl` + `data/unsynced/emote_tag_vecs.pkl` | `tools/build/build_emote_semantics.py` + emote tag-vector tooling | `~emote`, `~explain emote`, `~why emote` |
-
-Use `~artifacts` or `python tools/check/artifact_status.py` to check whether these
-artifacts are missing, missing build metadata, or built with the current
-semantic unit/model.
-
-After identity merges, embedding-model changes, or major filter changes, run
-`scripts/windows/10-rebuild-persona-artifacts.bat` or `tools/build/rebuild_persona_artifacts.py`.
-For an unattended run, use `scripts/windows/10-rebuild-persona-artifacts-background.bat`; it
-writes stdout/stderr logs under `data/unsynced`.
-The default semantic unit for embeddings/indexes is now a merged utterance; use
-`--semantic-unit message` only for a deliberate A/B against the old behavior.
+Some analysis commands need files built from the archive. `~artifacts` shows
+what is missing or out of date. The [architecture guide](ARCHITECTURE.md#analysis-data-files)
+lists the files, build tools and commands that use them.

@@ -1,16 +1,12 @@
-"""A/B two LM Studio models on the persona task (e.g. plain Llama vs the LoRA).
+"""Compare two served models using the same author, channel and persona-mode settings.
 
-For each persona, generate N lines from EACH model (same RAG prompt) and score
-every line with the authorship classifier: how often does the line read as the
-intended author? Prints the sample lines side by side plus a per-model
-"sounds-like-them" rate, so you can both read the outputs and see a number.
+Generate each sample in a separate persona-engine call, then report classifier
+top-1 attribution rates and display the generated lines. Evidence is selected
+per call, so the full prompts can differ. Both models must be served by the
+configured endpoint; requests select the model id.
 
-Both models must be loaded in LM Studio at once (it serves several; the request
-routes by model id). List ids:  curl -s http://127.0.0.1:1234/v1/models
-
-    python experiments/eval/compare_models.py --models meta-llama-3.1-8b-instruct,persona-lora-v2/persona_merged_q4_k_m
-                                     [--authors a,b,c] [--per-author 6] [--mode normal] [--channel ch]
-"""
+    python experiments/eval/compare_models.py --models base-id,adapter-id
+        [--authors a,b,c] [--per-author 6] [--mode normal] [--channel ch]"""
 
 import argparse
 import asyncio
@@ -60,7 +56,7 @@ async def run_model(model_id, authors, channel, per_author, mode):
             "n": n,
             "samples": samples,
         }
-        print(f"  ...{model_id} | {a}: {hits}/{n} read as them", flush=True)
+        print(f"  ...{model_id} | {a}: {hits}/{n} attributed to target", flush=True)
     return out
 
 
@@ -103,13 +99,13 @@ async def main():
     for a in authors:
         print(f"\n### {a}")
         for label, res in ((models[0], a_res[a]), (models[1], b_res[a])):
-            print(f"  {label} - reads-as-them {res['rate']:.0%} (avg {res['avg_prob']:.0%}, n={res['n']})")
+            print(f"  {label} - target attribution {res['rate']:.0%} (avg {res['avg_prob']:.0%}, n={res['n']})")
             for s in res["samples"][:3]:
                 print(f"      {s}")
     print("\n================ OVERALL ================")
     for label, res in ((models[0], a_res), (models[1], b_res)):
         rates = [res[a]["rate"] for a in authors if res[a]["n"]]
-        print(f"  {label}: reads-as-them {sum(rates)/len(rates):.0%}" if rates else f"  {label}: no data")
+        print(f"  {label}: target attribution {sum(rates)/len(rates):.0%}" if rates else f"  {label}: no data")
     out = os.path.join("data", "unsynced", "model_compare.json")
     with open(out, "w", encoding="utf-8") as fh:
         json.dump({"channel": channel, "models": models,

@@ -1,10 +1,8 @@
-"""Thin async client for an OpenAI-compatible chat endpoint.
+"""Async client for the configured OpenAI-compatible chat endpoint.
 
-Defaults to LM Studio's local server (config.LLM_ENDPOINT) - free, local, and
-private, so edgy persona content never leaves the machine. Any OpenAI-style
-`/v1/chat/completions` server works (LM Studio, llama.cpp server, Ollama's
-OpenAI shim, or a hosted API). Returns None on any failure so callers degrade
-gracefully (the bot stays up if the model server is off).
+Defaults to LM Studio's local server; configuration can select another
+compatible endpoint. Returns None and records failure details when a request
+fails.
 """
 
 import logging

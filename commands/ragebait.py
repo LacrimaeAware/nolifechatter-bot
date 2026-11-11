@@ -4,8 +4,8 @@ description = (
     "~ragebait <user> [topic] - wind someone up with receipts from their own "
     "archive: a freshly LLM-composed jab built on a real conversation they "
     "were in or a standing habit. Add a topic (~ragebait bob twin primes) to "
-    "aim it at what they've said about that subject. All facts are real; "
-    "nothing is invented. Needs the local model. ~ragebait ref [n] shows what "
+    "aim it at what they've said about that subject. Needs the local model. "
+    "~ragebait ref [n] shows what "
     "the last bait riffed on (n=2 is the one before that)."
 )
 

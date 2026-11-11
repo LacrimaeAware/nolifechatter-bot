@@ -1,5 +1,5 @@
 from utils.user_settings import update_user_setting, ensure_user_settings
-from auth import is_authorized  # Ensure this is the correct path to the authorization function
+from auth import is_authorized
 
 description = (
     'Set your translation target language (admins).\n'

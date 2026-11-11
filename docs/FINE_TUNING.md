@@ -1,12 +1,11 @@
 # Fine-tuning a persona voice model
 
-Goal: train a LoRA on the archive so an open model learns the chat voice of the
-people in your logs, then run the merged result locally in LM Studio. This is
-separate from retrieval: the retrieved examples in the prompt are the memory,
-the LoRA is only a style prior. Everything here is optional; the bot's persona
-commands work on a stock local model.
+This optional workflow trains a LoRA to adapt a model's writing style to the
+chat messages in your logs, then runs the merged model locally in LM Studio.
+Retrieval supplies archived messages in the prompt; fine-tuning changes model
+weights. The bot's persona commands also work with an untuned local model.
 
-The path is five files in `experiments/finetune/`:
+Scripts in `experiments/finetune/`:
 
 | File | Runs where | Does |
 | --- | --- | --- |
@@ -27,7 +26,7 @@ The path is five files in `experiments/finetune/`:
   --max-examples-per-author 5000
 ```
 
-Outputs (gitignored, they contain real chat):
+Output files (gitignored):
 
 - `data/unsynced/fine_tune/persona_train.jsonl`
 - `data/unsynced/fine_tune/persona_val.jsonl`
@@ -36,12 +35,7 @@ Each row is OpenAI-style chat JSONL: a fixed `system` instruction, a `user`
 turn with `<persona=name>` plus the preceding chat context, and the real next
 message that persona wrote as the `assistant` turn. Training is supervised
 next-token prediction on the assistant turn (completion-only loss when the
-installed TRL supports it). It does not train retrieval and does not memorize
-facts the way the archive does.
-
-Start small: one channel, a handful of chatters with a lot of history, alt
-accounts merged, bots excluded, at most 5,000 examples per author. That fits a
-single 24 GB GPU.
+installed TRL supports it).
 
 Bundle the data with the three GPU-side files:
 
@@ -97,33 +91,28 @@ models folder, load it, and terminate the pod.
 ## 4. Use and compare
 
 - Serve the merged model in LM Studio and set `[llm] model` to its id, or add
-  a shortcut under `[llm] model_shortcuts` so `~persona <user> model=lora`
+  a shortcut under `[llm] model_shortcuts` so `~persona model=lora chatter_01 <message>`
   picks it per call.
 - `[llm] ab_models = ["<base id>", "<lora id>"]` rolls one model per
   generation and tags posted lines `#llama` or `#lora`, so chat judges the
   candidates in place.
 - `experiments/eval/compare_models.py --models <base id>,<lora id>` generates
-  the same prompts on both models and scores each line with the authorship
-  classifier (`tools/build/train_classifier.py` builds it).
-  `experiments/eval/eval_personas.py` and `eval_heldout_replies.py` score the
-  live persona path against real held-out lines.
+  samples with the same author, channel and mode settings on both models, then
+  scores each line with the authorship classifier (`tools/build/train_classifier.py`
+  builds it). Retrieval and context can differ between calls.
+- `experiments/eval/eval_personas.py` compares generated-line classifier attribution
+  with sampled archive lines. `eval_heldout_replies.py` compares generated replies
+  with held-out replies and their preceding context.
 
 ## GPU and training shape
 
-- Use LoRA or QLoRA on a 7B to 9B instruct model. A 24 GB card (RTX 4090,
-  RTX 3090, A5000) trains the pilot shape in about two hours; an A100 or H100
-  is faster, not necessary. Do not start with a 70B model.
 - Defaults in `train_persona_lora_unsloth.py`: 1 epoch, rank 16, learning rate
   2e-4, sequence length 2048, effective batch 16 (`batch_size=2`,
   `grad_accum=8`), 5% validation split from the exporter, checkpoint every 100
   steps. A pilot of 41k training rows took about 2,580 optimizer steps at
   roughly 2.4 s per step on an RTX 4090.
-- Keep a Network Volume mounted at `/workspace` so caches, checkpoints and the
-  adapter survive a pod restart; 80 GB is plenty. Create it in the same
-  datacenter as the GPU you can rent.
-- Evaluate before spending more. If the merged model reads worse than the
-  base with retrieval, revisit the export filters or the base model before
-  training longer.
+- A Network Volume mounted at `/workspace` preserves caches, checkpoints and
+  the adapter across pod restarts.
 
 ## Troubleshooting
 
@@ -138,16 +127,7 @@ models folder, load it, and terminate the pod.
 - `Ctrl+C` before the first checkpoint loses the run; after step 100 a rerun
   resumes.
 
-## Output boundary
+## Output filtering
 
-Local training removes provider moderation from the picture, but Twitch is
-still where the text lands. Every generated line, fine-tuned or not, goes
-through `utils/output_filter.py` before it is posted, and the denylist stays in
-the gitignored `data/unsynced/blocklist.txt`.
-
-## What fine-tuning is not for
-
-Questions such as "do we have an emote of the bottle dog?" are archive
-questions. `~askchat` retrieves rows and emote names from the archive and asks
-the local model to answer from that evidence. Fine-tuning does not add memory;
-the archive and the retrieval layer do.
+Generated messages pass through `utils/output_filter.py` before they are
+posted. The configured denylist is stored in `data/unsynced/blocklist.txt`.

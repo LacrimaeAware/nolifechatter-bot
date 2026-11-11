@@ -1,19 +1,41 @@
-# ~generate, Saved Combos, And Bot Modes
+# Message generation and channel personas
 
-Originally specified 2026-06-11; refreshed 2026-07-15. Generation recipes,
-resident personas, queue-depth feedback, and ban/cooldown controls are live.
+`~persona <user> [message]` requests a reply in one chatter's style.
+`~generate` creates one message from a combination of users, traits and topics.
+`~botpersona` keeps a chosen persona active in a channel and controls when it replies.
 
-## 1. ~generate - tag-driven example generation (IMPLEMENTED)
+## Model persona replies
 
-One command that takes an unordered bag of tags/filters and produces an
-example message from that recipe:
+The persona engine prepares a prompt from the chatter's saved messages,
+topic matches, short conversation snippets and recent channel chat. A stable
+sample supplies recurring writing habits; retrieved examples supply context.
+Semantic matches can supplement keyword search when the message index is
+configured. Corroborated self-statements from the profile builder are included
+when available.
+
+For `~persona`, the engine can sample several replies. Candidate checks look
+for copied source lines, echoes of other chatters, speaker labels, URLs,
+commands and assistant-style preambles. Remaining candidates are ranked for
+the requested voice, topic fit, length and distance from source examples.
+Directed questions can also use a separate model check of whether each
+candidate answers the question.
+
+Channel personas use the same generator with one candidate and the reply
+rules below. `~generate` uses a separate recipe prompt with the selected
+chatters' examples and trait hints. Both paths can use an untuned local model.
+The optional [fine-tuning workflow](FINE_TUNING.md) changes model weights;
+retrieval supplies saved messages in the persona prompt.
+
+## Generate a message
+
+Combine tags to describe the message:
 
     ~generate <tags...>
 
 Tag kinds (order never matters; comma or space separated):
-- **chatter names** - one = that person's voice; several = a FUSION of them
+- **chatter names** - one uses that person's style; several blend their styles
 - **trait poles** - optimist/doomer, professor/brainrot, menace/wholesome,
-  ironic/sincere, unhinged/chill: pushes the message maximally that way
+  ironic/sincere, unhinged/chill: choose an exaggerated style
 - **chat=<channel>** - only use the chatters' messages from that channel
   (repeatable; each adds a channel to the allowed set)
 - **year=<YYYY>** - only their messages from that year
@@ -28,32 +50,30 @@ Examples:
     ~generate optimist topic=world of warcraft
     ~generate optimist            <- generic maximal optimist, varied each call
 
-Engine details: traits/topic-only recipes are pure prompting (pole example
-sentences as register hints + a variety nudge). Chatter recipes feed each
-person's (scoped) exemplars into the prompt; fusion asks for one blended
-voice. Candidate checks (no URLs, no bot-command lines, output filter) reuse
-the persona pipeline's rules.
+Recipes with only traits and topics use the model without a chatter's saved
+messages. Chatter recipes supply examples from each selected user, within the
+channel and year filters. Generated messages are checked for URLs, command
+lines and terms in the configured output denylist.
 
-## 2. Saved combos (IMPLEMENTED) - per-user, not global
+## Saved recipes
 
     ~generate save florpface chatterA chatterB optimist chat=somechannel
     ~generate florpface                  <- uses the recipe
     ~generate florpface professor        <- recipe + extra tags stacked on top
     ~generate list / ~generate del florpface
 
-Stored per Twitch user in the settings DB (gen_combos table); combos expand
-one level (a combo may not reference another combo).
+Recipes belong to the Twitch user who saves them and are stored in the
+settings database's `gen_combos` table. A recipe cannot reference another recipe.
 
-## 3. Bot Modes (IMPLEMENTED)
+## Channel personas
 
-Super-admin only. The bot can now get a channel-scoped "resident persona"
-using one real chatter voice. Full `~generate` recipes and saved combos as
-resident personas are still future work.
+Super admins can keep one chatter persona active per channel. Full
+`~generate` recipes and saved recipes cannot yet be used this way.
 
 - **regular** - may respond to normal incoming chat, with higher odds for
   direct messages, greetings, and topics the persona has many archived hits
   for. It can also send rare idle/empty-chat lines after chat has been quiet,
-  capped by a bot-streak guard.
+  with a limit on consecutive bot messages.
 - **response** - only replies when @mentioned, in the resident persona.
 - **random** - random chance per message (chance settable by command).
 - **silent** - commands only.
@@ -67,36 +87,22 @@ Live commands:
     ~botcontext [chat=<channel>] <free text|clear>
     ~botchance <base> [directed] [chat=<channel>] [topic=] [idle=] [greeting=] [cooldown=]
 
-Time-limited modes expire automatically. Resident output can also carry a
-configured prefix, which is live runtime state in `data/unsynced` rather than
-public repository config. Triggered resident replies use Twitch reply tags when
-the incoming message has an ID and the installed TwitchIO websocket exposes the
-low-level reply method; otherwise they fall back to normal channel send.
+Time-limited modes expire automatically. Replies can also carry a configured
+prefix. The [architecture guide](ARCHITECTURE.md#channel-persona-state) describes
+where settings are stored and how Twitch reply threads are used.
 
-## 4. Admin And Abuse Controls (IMPLEMENTED)
+## Command limits
 
-- `~banuser <name>` / `~unbanuser <name>` is implemented. Super-admin only;
-  banned users' commands are ignored entirely by `command_processor`.
-- Escalating anti-spam cooldowns apply to command stacking: sending a third
-  extra command while a previous one is still running earns a warning, and a
-  repeat breach within 15 minutes earns a per-user cooldown (3 minutes,
-  doubling per offense, capped at 15 minutes, forgiven after two quiet hours).
-  `command_processor` calls `utils/cooldowns.before()` before every command and
-  `after()` when it finishes. Recent offenses are reviewable with `~warnings`.
-- GPU-heavy commands, resident replies, and ambient generation share
-  `services/model_queue.py`. It announces start/queue position, allows one
-  active request per user, suppresses duplicate signatures, distinguishes a
-  busy model from an offline server, and exposes super-admin status/clear.
+- Super admins can use `~banuser <name>` and `~unbanuser <name>` to control who
+  may use bot commands.
+- Repeated command stacking triggers [cooldowns](COMMANDS.md#command-limits).
+  `~warnings` shows recent cooldowns.
+- Model commands and channel-persona replies share a queue. It reports queue
+  positions, allows one active request per user and rejects duplicate requests.
+  Super admins can inspect or clear it with `~model`.
 
-## Remaining Work
+## Local files and maintenance
 
-- Current resident mode state is `data/unsynced/resident_personas.json`.
-- The live queue is process-wide, not cross-process. Offline maintenance scripts
-  should run with the bot paused until a shared worker/lease exists.
-- A future richer volition gate could use a cheap "reply or STAY SILENT"
-  classifier before generation. The current live path uses probability,
-  direct/greeting heuristics, curved FTS topic-affinity boost, cooldown,
-  idle-roll limits, and a STOP instruction in the persona prompt to keep model
-  calls bounded.
-- Ban list: data/synced settings DB, cached set, checked first thing in
-  process_command. Implemented.
+Channel-persona settings are saved in `data/unsynced/resident_personas.json`.
+The queue coordinates requests within one bot process. Pause the bot while
+running offline maintenance that also uses the model server.

@@ -1,8 +1,8 @@
 """Anti-spam command cooldowns: punishes sustained stacking, warns first.
 
 Design:
-- The malicious pattern is sending MORE commands while your previous one is
-  still processing. Using commands a lot but waiting for each reply is fine.
+- Track repeated command stacking while a previous command is processing.
+- Commands sent after each reply do not count as stacking.
 - First time you stack past the limit you get a WARNING, not a ban - so a
   mistaken double-call or a syntax check never costs you a cooldown. Only if you
   keep stacking (another breach within WARN_GRACE) does a cooldown apply.

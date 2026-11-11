@@ -1,8 +1,8 @@
 # Setup
 
-Two paths share one install. Path A runs the translation bot on your channel.
-Path B archives chat and builds personas from your own logs; it works without a
-Twitch connection and without a model server until you want model personas.
+Install once to run the Twitch bot or use the offline chat tools. The bot needs
+Twitch credentials; offline search and Markov generation need only chat logs.
+A local model server is optional for generated replies.
 
 ## 1. Install
 
@@ -21,7 +21,7 @@ copy config.example.toml config.toml
 holds secrets. Both are gitignored. `pyproject.toml` lists the same
 dependencies for `poetry install` if you prefer Poetry.
 
-## 2. Path A: the translation bot
+## 2. Run the Twitch bot
 
 1. Create a Twitch application at `https://dev.twitch.tv/console/apps`. Add
    `http://localhost:3000` under OAuth Redirect URLs. Put the client id and
@@ -29,7 +29,7 @@ dependencies for `poetry install` if you prefer Poetry.
 2. Translation provider: a DeepL API key (`DEEPL_API_KEY`, free tier at
    `https://www.deepl.com/pro-api`) or a Google Cloud Translation
    service-account file (`GOOGLE_APPLICATION_CREDENTIALS`). DeepL is tried
-   first; with neither, the bot still runs and translation stays quiet.
+   first. Without either provider, translation is disabled.
 3. In `config.toml`, set `[bot] channels` to the channels the bot joins and
    `[auth] admins` and `super_admins` to Twitch logins.
 4. Create the settings database and fetch the bot account's first token. The
@@ -59,7 +59,7 @@ dependencies for `poetry install` if you prefer Poetry.
    | `~global_autotl on` | super admin | master switch |
    | `~chan_autotl <channel> on` | super admin | per-channel switch |
    | `~autotl`, `~setlang ES`, `~tloutput local\|whisper\|channel <name>` | admin | your own translations and where they go |
-   | `~practice on es,ja en` | anyone | practice mode: whispers you the study-language translations of what you write |
+   | `~practice on es,ja en` | anyone | whispers study-language translations of your native-language messages; posts native-language translations of your study-language messages in chat |
    | `~romanize on`, `~speak <lang>` | anyone | readings for non-Latin scripts; declare a language so short messages still translate |
    | `~notranslate <user>` | super admin | skip a chatter the detector misreads |
 
@@ -67,7 +67,7 @@ dependencies for `poetry install` if you prefer Poetry.
    number and the `user:manage:whispers` scope (requested by the token helper),
    and whispers can still be dropped.
 
-## 3. Path B: archive your chat and build a persona
+## 3. Import, search and generate messages
 
 1. Import Chatterino logs. Chatterino stores one folder per channel under
    `%AppData%\Chatterino2\Logs\Twitch\Channels`; pass that folder, or set
@@ -78,8 +78,8 @@ dependencies for `poetry install` if you prefer Poetry.
    python tools/archive/ingest_chatterino.py examples/sample-logs
    ```
 
-   Re-running is safe: unchanged files are skipped and a file that grew is
-   re-imported. With the bot running and `[archive] live_capture = true`, every
+   Unchanged files are skipped; files that grew are re-imported.
+   With the bot running and `[archive] live_capture = true`, every
    message it sees is added as well.
 
 2. Search from a terminal (`said`, `near`, `quote`, `stats`, `search`), or in
@@ -91,7 +91,7 @@ dependencies for `poetry install` if you prefer Poetry.
    python tools/archive/ask_archive.py stats chatter_01
    ```
 
-3. Markov persona, no model needed. A chatter needs at least 40 archived
+3. Generate a Markov message, without a model server. A chatter needs at least 40 archived
    messages. Preview in a terminal, or post in chat with `~markov <user>`
    (`[persona] mimic_enabled`):
 
@@ -99,9 +99,9 @@ dependencies for `poetry install` if you prefer Poetry.
    python tools/archive/persona_preview.py chatter_01 5 --seed 7
    ```
 
-4. Retrieved-example persona. `persona_rag_preview.py` prints the evidence the
-   bot would put in front of a model (signature lines, lines about the topic,
-   chat-moment snippets) without calling one:
+4. Preview the messages selected for a model reply. `persona_rag_preview.py`
+   prints examples of the chatter's writing, topic matches and conversation
+   snippets without calling a model:
 
    ```sh
    python tools/archive/persona_rag_preview.py chatter_01 sourdough --seed 7
@@ -111,8 +111,8 @@ dependencies for `poetry install` if you prefer Poetry.
    persona modes. Install LM Studio (or any server that speaks
    `/v1/chat/completions`), load a chat model and start its server. The default
    `[llm] endpoint` is `http://127.0.0.1:1234/v1/chat/completions`; `model =
-   "local"` picks the first loaded chat model. `[llm] enabled = false` boots with
-   every model call blocked, and `~model off` / `~model on` switch it at
+   "local"` picks the first loaded chat model. `[llm] enabled = false` starts with
+   model calls disabled, and `~model off` / `~model on` switch it at
    runtime. Archive search and Markov personas keep working either way.
 
 6. Optional analysis artifacts (`~whosaid`, `~markers`, `~like`, `~vibes`,
@@ -147,7 +147,7 @@ to 4 on the synthetic log and shows the exact output.
 | `[persona] blocklist_file` | `data/unsynced/blocklist.txt` | denylist checked before anything generated is posted; no file means no filter |
 | `[llm] enabled`, `endpoint`, `model`, `embed_model` | true, LM Studio, `local`, `""` | model personas and embedding-based analysis |
 | `[llm] semantic_retrieval` | false | meaning-based retrieval for persona evidence (needs the message index) |
-| `[analysis] channels`, `max_authors`, `min_messages` | bot channels, 40, 300 | the cohort the analysis artifacts describe |
+| `[analysis] channels`, `max_authors`, `min_messages` | bot channels, 40, 300 | the chatters included in analysis |
 | `[announce]`, `[seventv]` | off | periodic posts; 7TV emote-set editing |
 
 ## 5. Windows launchers

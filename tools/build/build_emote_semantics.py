@@ -1,20 +1,12 @@
-"""Usage-context emote semantics: what an emote MEANS, learned from our logs.
+"""Build emote context vectors from sampled archive messages.
 
-Emote names lie (deliberately irrelevant names), images aren't always
-fetchable (dead emotes in old logs), and fake personal emotes exist. But
-meaning-from-usage covers all of it: an emote's vector = mean embedding of
-the messages it appears in, with the emote token itself removed. DansGame's
-contexts are disgust, so its vector points at disgust - the stance-OPERATOR
-meaning the name embedding can never carry.
-
-Per emote: sample up to --contexts deduped messages containing it (FTS), strip
-the emote, and mean-pool the remaining words. Bare-emote reactions use the
-preceding human line as their context. Evidence is diversified across authors;
-emotes with too few usable contexts keep their prior vector when available.
+Per emote, sample up to --contexts deduplicated messages, remove the token,
+embed the remaining context and mean-pool. Bare-emote lines use a preceding
+human line. Diversify across authors and retain prior vectors when too few
+usable contexts are available.
 
     python tools/build/build_emote_semantics.py [--top 2000] [--contexts 160]
-    python tools/build/build_emote_semantics.py --emotes BatChest,KEKW --contexts 200 --refresh
-"""
+    python tools/build/build_emote_semantics.py --emotes BatChest,KEKW --contexts 200 --refresh"""
 
 import argparse
 import hashlib

@@ -7,8 +7,7 @@ description = (
     "~axismerge <canonical> <dup> [flip] - fold a duplicate dynamic axis into "
     "another (super admins). Same pole by default; add 'flip' when <dup> names "
     "the OPPOSITE pole. ~axismerge del <axis> deletes a junk axis outright; "
-    "~axismerge list shows saved axes. Auto-merge is off on purpose: embedding "
-    "cosine can't tell synonyms from distinct concepts, so dedup is a human call."
+    "~axismerge list shows saved axes."
 )
 
 

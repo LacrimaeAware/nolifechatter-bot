@@ -21,8 +21,7 @@ async def run_markov(message, params, command_name="markov"):
         await message.channel.send(f"Not enough archived messages to mimic {user}.")
         return
 
-    # Generate until we get a clean, non-trivial line (or give up). The output
-    # filter is what keeps the bot from posting a bannable line to Twitch.
+    # Try up to 15 non-trivial lines and post one that passes the denylist.
     line = None
     for _ in range(15):
         cand = persona_markov.generate(model)

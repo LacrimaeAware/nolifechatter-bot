@@ -1,29 +1,23 @@
-# Chat Archive - design
+# Chat archive
 
-A single searchable SQLite database of every chat message you have: historical
-Chatterino logs ingested once, plus everything the bot sees live going forward.
-This is the foundation layer - personas, "did user X ever say Y?", stats, and
-trivia all read from it.
+The archive stores imported Chatterino logs and messages from the bot's joined
+channels in one SQLite database. Search, statistics and message generation
+read from this database.
 
-**Status: built.** `utils/chat_archive.py` (schema, parser, queries),
-`tools/archive/ingest_chatterino.py` (historical ingest), `tools/archive/ask_archive.py`
-(offline CLI), live capture in `handlers.py`, and the `~said` / `~quote` /
-`~firstseen` / `~chatstats` commands. [ARCHITECTURE.md](ARCHITECTURE.md) shows
-where this layer sits between the translation bot and the persona tools.
+Use `tools/archive/ingest_chatterino.py` to import logs and
+`tools/archive/ask_archive.py` to search from a terminal. In Twitch chat, use
+`~said`, `~quote`, `~firstseen` and `~chatstats`. The
+[architecture guide](ARCHITECTURE.md) lists the implementation files.
 
-## Why SQLite + FTS5 (and not an LLM)
+## Storage and search
 
-"Did user X ever say Y?" is an *exact retrieval* question. A full-text index
-answers it instantly, perfectly, offline, and for free. SQLite ships with
-[FTS5](https://www.sqlite.org/fts5.html) built in - no server, no dependencies,
-and Python's stdlib `sqlite3` can use it directly. An LLM only enters the
-picture for *fuzzy* questions ("what does X usually talk about?"), and even
-then it works best reading rows this index retrieved first.
+Phrase searches use SQLite's [FTS5](https://www.sqlite.org/fts5.html) full-text
+index through Python's `sqlite3` module. They do not need a model server.
+Commands such as `~askchat` can pass retrieved messages to a local model to
+answer a question.
 
-A ~13 GB text corpus is comfortably within SQLite's range (the format is used
-for databases orders of magnitude larger). Expect the DB + FTS index to be
-roughly the size of the ingested text; ingest only the channels you care about
-if disk matters.
+Allow disk space for both the database and its full-text index. Use
+`--channels` to limit the import.
 
 ## Sources
 
@@ -31,8 +25,7 @@ if disk matters.
 
 Chatterino logs live under `<Chatterino2>/Logs/Twitch/Channels/`, one
 subdirectory per channel, one file per channel per day, named
-`<channel>-YYYY-MM-DD.log`. The format (verified against a real multi-GB
-archive):
+`<channel>-YYYY-MM-DD.log`. Expected format:
 
 - **Encoding:** UTF-8 without BOM, bare `\n` line endings (even on Windows).
   Real emoji and arbitrary bytes appear - open with `encoding="utf-8",
@@ -44,19 +37,19 @@ archive):
 - **Chat lines:** `[HH:MM:SS] username: message text` - 24-hour **local** time,
   time-only. The *date comes from the filename*; the timezone only from the
   header text. Twitch logins are `[a-z0-9_]+`, so splitting on the **first**
-  `": "` after the timestamp is safe (message bodies freely contain colons
-  never split on the last one).
+  `": "` after the timestamp separates the username from the message. Message
+  bodies can contain colons, so do not split on the last one.
 - **System lines:** timestamped but with no `user:` part - `connected`,
   `disconnected`, `joined channel`, emote-reload notices, etc. A chat-line
   regex like `^\[(\d{2}:\d{2}:\d{2})\] ([a-z0-9_]+): (.*)$` must be allowed to
   fail and fall through to a system branch.
 - **Moderation lines:** `user has been timed out for 1m. ` (note trailing
-  space + period), bans, unbans. **Trap:** moderator actions can masquerade as
+  space + period), bans, unbans. Moderator actions can look like
   chat lines - `[12:10:48] somemod: somemod timed out someuser for 7d. ` parses
   as a "message" from the moderator. Filter lines whose body matches the
-  moderation-notice shapes if purity matters.
-- **Empty lines:** `[21:56:54] ` (timestamp + single space) occur; guard
-  against index errors.
+  moderation-notice shapes before analysing chat messages.
+- **Empty lines:** `[21:56:54] ` (timestamp + single space) occur; skip their
+  empty content.
 - Messages are always single-line (one IRC message = one log line); no `/me`
   marker survives into the log.
 - Channel directories accumulate typo/rename duplicates of the same streamer
@@ -67,10 +60,8 @@ archive):
 
 ### 2. Live capture (ongoing)
 
-The bot already receives every message in its joined channels. A small hook in
-`handlers.process_message` inserts each message into the same table. This makes
-the archive self-maintaining from the day it's built, independent of
-Chatterino running.
+When live capture is enabled, `handlers.process_message` inserts messages
+from joined channels into the same table. Chatterino does not need to be running.
 
 ### 3. Other log sources
 
@@ -81,8 +72,6 @@ mirror can be told apart from Chatterino history and live capture. Imported
 one-speaker files are not complete transcripts: `chat_archive.context_window()`
 returns only the hit itself for author-only neighborhoods, so conversation
 reconstruction never treats adjacent rows from such a file as surrounding chat.
-The private working repository carries a downloader for one public log mirror;
-it is not part of the public edition.
 
 ## Schema
 
@@ -101,7 +90,7 @@ CREATE TABLE messages (
 CREATE INDEX idx_msg_author  ON messages(author, sent_at);
 CREATE INDEX idx_msg_channel ON messages(channel, sent_at);
 
--- Full-text index over content, contentless-delete style keyed to messages.
+-- External-content full-text index keyed to messages.id.
 CREATE VIRTUAL TABLE messages_fts USING fts5(
     content, content='messages', content_rowid='id'
 );
@@ -130,21 +119,15 @@ identity map makes artifact status warn until those files are rebuilt.
 
 Semantic utterance v3 merges a person's short message bursts independently in
 each channel and collapses duplicate text components inside the merged text.
-The record still retains every source message id/part for chronology and
-provenance. This matters when logs from several live channels overlap or the
-same imported event appears through an alias mirror: unrelated rooms must never
-be concatenated, and repeated storage must not become repeated semantic
-evidence. Generated message indexes, person vectors, and IQ caches record the
-utterance version so older files produce an artifact warning.
+Source message IDs and parts preserve the chronology. Generated message
+indexes and person vectors record the utterance version; older versions
+produce an artifact warning.
 
-Dedup between Chatterino history and live capture: the live hook only writes
-messages the bot receives in real time, and the one-time ingest covers the
-past; overlap is limited to the build day and is harmless for every use case
-here (stats, search, personas). If exactness matters later, add a
-`UNIQUE(channel, author, sent_at, content)` index with `INSERT OR IGNORE`.
+Chatterino imports and live capture can overlap on the import day. The schema
+above does not enforce `UNIQUE(channel, author, sent_at, content)` across
+sources.
 
-The DB lives at `data/unsynced/chat_archive.db`, inside a gitignored directory,
-so ordinary commits do not pick up chat content.
+The database is stored at `data/unsynced/chat_archive.db`.
 
 ## Ingest CLI
 
@@ -153,11 +136,11 @@ python tools/archive/ingest_chatterino.py <logs-root> [--channels a,b,c] [--sinc
 ```
 
 - Walks `<logs-root>/<channel>/<channel>-YYYY-MM-DD.log`, skips files already
-  in `ingested_files` with unchanged mtime (so re-runs only pick up new days).
+  in `ingested_files` with unchanged mtime. Imports new files and reimports
+  changed files.
 - Parses per the format spec above; system/moderation/header/empty lines are
-  counted but not stored (or stored with `source='system'` if you want them).
-- Batched inserts inside transactions (`executemany`, ~10k rows/commit) - a
-  multi-GB ingest is minutes, not hours.
+  counted but not stored.
+- Batched inserts with `executemany`, in one transaction per file.
 
 ## Query layer
 
@@ -176,7 +159,7 @@ input always quoted - chat text can't inject query syntax). A phrase with no
 alphanumeric characters at all (emoji-only) falls back to substring search,
 since the tokenizer would otherwise drop it.
 
-In chat (bot commands, follow the existing `commands/` auto-discovery pattern):
+In Twitch chat:
 
 | Command | Does |
 | --- | --- |
@@ -185,11 +168,10 @@ In chat (bot commands, follow the existing `commands/` auto-discovery pattern):
 | `~firstseen <user>` | first recorded message + date |
 | `~chatstats <user>` | message count, top emotes, busiest hour |
 
-One hard-won planner note: query the FTS table with `CROSS JOIN messages` (or
+Query the FTS table with `CROSS JOIN messages` (or
 an `IN (SELECT rowid ...)` subquery) so SQLite runs the FTS match once and
-probes by rowid - the innocent-looking plain `JOIN` flips the loop order and
-re-evaluates the match per candidate row, turning a 3 ms query into minutes on
-a large archive.
+probes by rowid. A plain `JOIN` can change the loop order and re-evaluate the
+match for each candidate row.
 
 When exact `said` search finds nothing, the command and CLI fall back to a
 normalized close-match check. That treats straight vs curly apostrophes,
@@ -198,10 +180,9 @@ when chat/LLM output changes typography or adds a small mention/emote tail.
 Use `tools/archive/ask_archive.py near <user> <line>` when you explicitly want the
 closest lines instead of an exact-first answer.
 
-## Optional later: semantic layer
+## Search by meaning
 
-For "did X ever talk about <concept>" (not exact words): embed messages with a
-local sentence-transformers model (CPU is fine at this scale, done once) into a
-vector table, and answer fuzzy questions by nearest-neighbor + showing the
-actual rows. Strictly optional - exact search covers most of the fun, and this
-adds a dependency. Don't build until exact search feels limiting.
+The optional message index supports retrieval by similar meaning. The
+[architecture guide](ARCHITECTURE.md#analysis-data-files) lists its builder,
+embedding model requirements and the commands that use it. Phrase search and
+normalized close matches do not require this index.
